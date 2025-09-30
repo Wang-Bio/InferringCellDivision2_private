@@ -8,6 +8,7 @@
 
 class QGraphicsScene;
 class Vertex;
+class QGraphicsPixmapItem;
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -27,14 +28,15 @@ private slots:
     void on_actionAdd_Vertex_triggered();
     void on_actionDelete_Vertex_triggered();
     void on_actionDelete_All_Vertices_triggered();
+    void on_actionCustom_Canvas_triggered();
 
 private:
     Vertex *createVertex(const QPointF &position);
     void deleteVertex(Vertex *vertex);
-    QPointF nextVertexPosition() const;
 
     Ui::MainWindow *ui;
     QGraphicsScene *m_scene = nullptr;
     std::vector<std::unique_ptr<Vertex>> m_vertices;
+    QGraphicsPixmapItem *m_backgroundItem = nullptr;
 };
 #endif // MAINWINDOW_H

@@ -90,6 +90,8 @@
     <property name="title">
      <string>Open</string>
     </property>
+    <addaction name="actionCell_Contour_Image"/>
+    <addaction name="actionCustom_Canvas"/>
    </widget>
    <widget class="QMenu" name="menuProcess">
     <property name="title">
@@ -176,6 +178,16 @@
   <action name="actionScreen_Shot_View">
    <property name="text">
     <string>Screen Shot (View)</string>
+   </property>
+  </action>
+  <action name="actionCell_Contour_Image">
+   <property name="text">
+    <string>Cell Contour Image</string>
+   </property>
+  </action>
+  <action name="actionCustom_Canvas">
+   <property name="text">
+    <string>Custom Canvas</string>
    </property>
   </action>
  </widget>
