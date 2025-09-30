@@ -10,10 +10,12 @@ CONFIG += c++17
 
 SOURCES += \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    vertex.cpp
 
 HEADERS += \
-    mainwindow.h
+    mainwindow.h \
+    vertex.h
 
 FORMS += \
     mainwindow.ui
