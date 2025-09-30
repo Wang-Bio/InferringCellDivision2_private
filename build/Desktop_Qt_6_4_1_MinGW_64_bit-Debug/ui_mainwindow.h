@@ -194,12 +194,12 @@ public:
         actionFind_Vertex->setText(QCoreApplication::translate("MainWindow", "Find Vertex", nullptr));
         actionScreen_Shot_all->setText(QCoreApplication::translate("MainWindow", "Screen Shot (all)", nullptr));
         actionScreen_Shot_View->setText(QCoreApplication::translate("MainWindow", "Screen Shot (View)", nullptr));
-        label->setText(QCoreApplication::translate("MainWindow", "TextLabel", nullptr));
-        label_2->setText(QCoreApplication::translate("MainWindow", "TextLabel", nullptr));
-        label_3->setText(QCoreApplication::translate("MainWindow", "TextLabel", nullptr));
-        label_4->setText(QCoreApplication::translate("MainWindow", "TextLabel", nullptr));
-        label_5->setText(QCoreApplication::translate("MainWindow", "TextLabel", nullptr));
-        label_6->setText(QCoreApplication::translate("MainWindow", "TextLabel", nullptr));
+        label->setText(QCoreApplication::translate("MainWindow", "Input Directory", nullptr));
+        label_2->setText(QCoreApplication::translate("MainWindow", "-", nullptr));
+        label_3->setText(QCoreApplication::translate("MainWindow", "Input FileName", nullptr));
+        label_4->setText(QCoreApplication::translate("MainWindow", "-", nullptr));
+        label_5->setText(QCoreApplication::translate("MainWindow", "Canvas Size", nullptr));
+        label_6->setText(QCoreApplication::translate("MainWindow", "-", nullptr));
         menuOpen->setTitle(QCoreApplication::translate("MainWindow", "Open", nullptr));
         menuProcess->setTitle(QCoreApplication::translate("MainWindow", "Process", nullptr));
         menuEdit->setTitle(QCoreApplication::translate("MainWindow", "Edit", nullptr));
