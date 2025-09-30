@@ -2,6 +2,12 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QPointF>
+#include <memory>
+#include <vector>
+
+class QGraphicsScene;
+class Vertex;
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -17,7 +23,18 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+private slots:
+    void on_actionAdd_Vertex_triggered();
+    void on_actionDelete_Vertex_triggered();
+    void on_actionDelete_All_Vertices_triggered();
+
 private:
+    Vertex *createVertex(const QPointF &position);
+    void deleteVertex(Vertex *vertex);
+    QPointF nextVertexPosition() const;
+
     Ui::MainWindow *ui;
+    QGraphicsScene *m_scene = nullptr;
+    std::vector<std::unique_ptr<Vertex>> m_vertices;
 };
 #endif // MAINWINDOW_H
