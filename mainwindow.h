@@ -33,6 +33,8 @@ private slots:
 private:
     Vertex *createVertex(const QPointF &position);
     void deleteVertex(Vertex *vertex);
+    int nextAvailableId() const;
+    void sortVerticesById();
 
     Ui::MainWindow *ui;
     QGraphicsScene *m_scene = nullptr;

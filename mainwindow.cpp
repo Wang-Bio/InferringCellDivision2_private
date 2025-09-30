@@ -47,9 +47,11 @@ MainWindow::~MainWindow()
 
 Vertex *MainWindow::createVertex(const QPointF &position)
 {
-    auto vertex = std::make_unique<Vertex>(position, m_scene);
+    const int id = nextAvailableId();
+    auto vertex = std::make_unique<Vertex>(id, position, m_scene);
     Vertex *vertexPtr = vertex.get();
     m_vertices.push_back(std::move(vertex));
+    sortVerticesById();
     return vertexPtr;
 }
 
@@ -66,6 +68,26 @@ void MainWindow::deleteVertex(Vertex *vertex)
     if (it != m_vertices.end()) {
         m_vertices.erase(it);
     }
+}
+
+int MainWindow::nextAvailableId() const
+{
+    int id = 0;
+    while (std::find_if(m_vertices.begin(), m_vertices.end(),
+                        [id](const std::unique_ptr<Vertex> &candidate) {
+                            return candidate->id() == id;
+                        }) != m_vertices.end()) {
+        ++id;
+    }
+    return id;
+}
+
+void MainWindow::sortVerticesById()
+{
+    std::sort(m_vertices.begin(), m_vertices.end(),
+              [](const std::unique_ptr<Vertex> &lhs, const std::unique_ptr<Vertex> &rhs) {
+                  return lhs->id() < rhs->id();
+              });
 }
 
 void MainWindow::on_actionAdd_Vertex_triggered()
@@ -105,20 +127,19 @@ void MainWindow::on_actionAdd_Vertex_triggered()
 
 void MainWindow::on_actionDelete_Vertex_triggered()
 {
-    if (m_vertices.empty())
-        if (m_vertices.empty()) {
-            QMessageBox::information(this,
-                                     tr("Delete Vertex"),
-                                     tr("There are no vertices to delete."));
-            return;
-        }
+    if (m_vertices.empty()) {
+        QMessageBox::information(this,
+                                 tr("Delete Vertex"),
+                                 tr("There are no vertices to delete."));
+        return;
+    }
 
     QStringList vertexLabels;
     vertexLabels.reserve(static_cast<int>(m_vertices.size()));
     for (std::size_t i = 0; i < m_vertices.size(); ++i) {
         const QPointF position = m_vertices[i]->position();
         vertexLabels.append(tr("Vertex %1 (%2, %3)")
-                                .arg(i + 1)
+                                .arg(m_vertices[i]->id())
                                 .arg(position.x(), 0, 'f', 2)
                                 .arg(position.y(), 0, 'f', 2));
     }
@@ -139,17 +160,11 @@ void MainWindow::on_actionDelete_Vertex_triggered()
     if (selectedIndex < 0)
         return;
 
-    Vertex *vertex = m_vertices.back().get();
-    deleteVertex(vertex);
     deleteVertex(m_vertices[static_cast<std::size_t>(selectedIndex)].get());
 }
 
 void MainWindow::on_actionDelete_All_Vertices_triggered()
 {
-    m_vertices.clear();
-    if (m_vertices.empty())
-        return;
-
     const auto reply = QMessageBox::question(this,
                                              tr("Delete All Vertices"),
                                              tr("Are you sure you want to delete all vertices?"),

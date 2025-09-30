@@ -9,15 +9,17 @@ class QGraphicsEllipseItem;
 class Vertex
 {
 public:
-    Vertex(const QPointF &position, QGraphicsScene *scene, qreal radius = 6.0);
+    Vertex(int id, const QPointF &position, QGraphicsScene *scene, qreal radius = 6.0);
     ~Vertex();
 
+    int id() const;
     QPointF position() const;
     void setPosition(const QPointF &position);
 
 private:
     void updateGraphicsItem();
 
+    int m_id;
     QPointF m_position;
     QGraphicsScene *m_scene;
     QGraphicsEllipseItem *m_item;

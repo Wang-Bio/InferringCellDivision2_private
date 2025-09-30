@@ -6,8 +6,9 @@
 #include <QBrush>
 #include <QRectF>
 
-Vertex::Vertex(const QPointF &position, QGraphicsScene *scene, qreal radius)
-    : m_position(position)
+Vertex::Vertex(int id, const QPointF &position, QGraphicsScene *scene, qreal radius)
+    : m_id(id)
+    , m_position(position)
     , m_scene(scene)
     , m_item(nullptr)
     , m_radius(radius)
@@ -28,6 +29,11 @@ Vertex::~Vertex()
     }
     delete m_item;
     m_item = nullptr;
+}
+
+int Vertex::id() const
+{
+    return m_id;
 }
 
 QPointF Vertex::position() const
