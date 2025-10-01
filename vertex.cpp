@@ -16,7 +16,7 @@ public:
         : QGraphicsEllipseItem(-radius, -radius, radius * 2, radius * 2)
         , m_vertex(vertex)
     {
-        setBrush(QBrush(Qt::yellow));
+        setBrush(QBrush(Qt::red));
         setPen(QPen(Qt::NoPen));
         setZValue(1.0);
         setFlag(QGraphicsItem::ItemIsSelectable);
