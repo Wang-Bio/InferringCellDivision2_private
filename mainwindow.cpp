@@ -50,6 +50,7 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include <cmath>
 
 namespace {
 struct SnapshotOptions
@@ -57,6 +58,101 @@ struct SnapshotOptions
     QString filePath;
     int quality = 90;
 };
+
+qreal signedArea(const std::vector<Vertex *> &vertices)
+{
+    if (vertices.size() < 3)
+        return 0.0;
+
+    qreal area = 0.0;
+    for (std::size_t i = 0; i < vertices.size(); ++i) {
+        const Vertex *current = vertices[i];
+        const Vertex *next = vertices[(i + 1) % vertices.size()];
+        if (!current || !next)
+            continue;
+
+        const QPointF currentPos = current->position();
+        const QPointF nextPos = next->position();
+        area += (currentPos.x() * nextPos.y()) - (nextPos.x() * currentPos.y());
+    }
+
+    return area * 0.5;
+}
+
+void ensureCounterClockwise(std::vector<Vertex *> &vertices, std::vector<Line *> &lines)
+{
+    if (vertices.size() < 3 || lines.size() != vertices.size())
+        return;
+
+    if (signedArea(vertices) < 0) {
+        std::vector<Vertex *> reversedVertices;
+        reversedVertices.reserve(vertices.size());
+        reversedVertices.push_back(vertices.front());
+        for (std::size_t i = vertices.size(); i-- > 1;)
+            reversedVertices.push_back(vertices[i]);
+
+        std::vector<Line *> reversedLines;
+        reversedLines.reserve(lines.size());
+        for (auto it = lines.rbegin(); it != lines.rend(); ++it)
+            reversedLines.push_back(*it);
+
+        vertices = std::move(reversedVertices);
+        lines = std::move(reversedLines);
+    }
+}
+
+std::vector<Vertex *> sortVerticesCounterClockwise(const std::vector<Vertex *> &vertices)
+{
+    std::vector<Vertex *> sorted;
+    sorted.reserve(vertices.size());
+    for (Vertex *vertex : vertices) {
+        if (vertex)
+            sorted.push_back(vertex);
+    }
+
+    if (sorted.size() < 3)
+        return sorted;
+
+    qreal sumX = 0.0;
+    qreal sumY = 0.0;
+    for (Vertex *vertex : sorted) {
+        const QPointF pos = vertex->position();
+        sumX += pos.x();
+        sumY += pos.y();
+    }
+    const qreal invCount = 1.0 / static_cast<qreal>(sorted.size());
+    const QPointF centroid(sumX * invCount, sumY * invCount);
+
+    std::sort(sorted.begin(), sorted.end(), [&centroid](Vertex *lhs, Vertex *rhs) {
+        const QPointF lhsPos = lhs->position();
+        const QPointF rhsPos = rhs->position();
+        const qreal lhsAngle = std::atan2(lhsPos.y() - centroid.y(), lhsPos.x() - centroid.x());
+        const qreal rhsAngle = std::atan2(rhsPos.y() - centroid.y(), rhsPos.x() - centroid.x());
+        if (lhsAngle < rhsAngle)
+            return true;
+        if (lhsAngle > rhsAngle)
+            return false;
+
+        const qreal lhsDx = lhsPos.x() - centroid.x();
+        const qreal lhsDy = lhsPos.y() - centroid.y();
+        const qreal rhsDx = rhsPos.x() - centroid.x();
+        const qreal rhsDy = rhsPos.y() - centroid.y();
+        const qreal lhsDistSq = lhsDx * lhsDx + lhsDy * lhsDy;
+        const qreal rhsDistSq = rhsDx * rhsDx + rhsDy * rhsDy;
+        return lhsDistSq < rhsDistSq;
+    });
+
+    if (signedArea(sorted) < 0) {
+        std::vector<Vertex *> reversed;
+        reversed.reserve(sorted.size());
+        reversed.push_back(sorted.front());
+        for (std::size_t i = sorted.size(); i-- > 1;)
+            reversed.push_back(sorted[i]);
+        sorted = std::move(reversed);
+    }
+
+    return sorted;
+}
 
 std::optional<SnapshotOptions> requestSnapshotOptions(QWidget *parent,
                                                      const QString &title,
@@ -331,8 +427,16 @@ Polygon *MainWindow::createPolygonWithId(int id,
     if (findPolygonById(id))
         return nullptr;
 
-    auto vertexCopy = vertices;
-    auto lineCopy = lines;
+    std::vector<Line *> lineCopy = lines;
+    std::vector<Vertex *> vertexCopy;
+
+    std::vector<Line *> orderedLines;
+    std::vector<Vertex *> orderedVertices;
+    if (!orderLinesIntoPolygon(lineCopy, orderedLines, orderedVertices))
+        return nullptr;
+
+    lineCopy = std::move(orderedLines);
+    vertexCopy = std::move(orderedVertices);
 
     auto polygon = std::make_unique<Polygon>(id, std::move(vertexCopy), std::move(lineCopy), m_scene);
     Polygon *polygonPtr = polygon.get();
@@ -550,6 +654,8 @@ bool MainWindow::orderLinesIntoPolygon(const std::vector<Line *> &inputLines,
 
     if (orderedVertices.size() != orderedLines.size())
         return false;
+
+    ensureCounterClockwise(orderedVertices, orderedLines);
 
     return true;
 }
@@ -792,6 +898,7 @@ void MainWindow::on_actionAdd_Polygon_triggered()
 
     std::vector<Vertex *> polygonVertices;
     std::vector<Line *> polygonLines;
+    std::vector<Line *> newlyCreatedLines;
 
     if (verticesRadio->isChecked()) {
         std::vector<int> vertexIds;
@@ -840,20 +947,37 @@ void MainWindow::on_actionAdd_Polygon_triggered()
             return;
         }
 
+        polygonVertices = sortVerticesCounterClockwise(polygonVertices);
+        if (polygonVertices.size() < 3) {
+            QMessageBox::warning(this,
+                                  tr("Add Polygon"),
+                                  tr("Failed to determine a valid polygon from the provided vertices."));
+            return;
+        }
+
         polygonLines.reserve(polygonVertices.size());
+        newlyCreatedLines.reserve(polygonVertices.size());
         for (std::size_t i = 0; i < polygonVertices.size(); ++i) {
             Vertex *startVertex = polygonVertices[i];
             Vertex *endVertex = polygonVertices[(i + 1) % polygonVertices.size()];
             Line *line = findLineByVertices(startVertex, endVertex);
             if (!line) {
-                QMessageBox::warning(this,
-                                      tr("Add Polygon"),
-                                      tr("No line connects vertex %1 and vertex %2.").arg(startVertex->id()).arg(endVertex->id()));
-                return;
+                line = createLine(startVertex, endVertex);
+                if (!line) {
+                    QMessageBox::warning(this,
+                                          tr("Add Polygon"),
+                                          tr("Failed to create a line between vertex %1 and vertex %2.").arg(startVertex->id()).arg(endVertex->id()));
+                    for (Line *createdLine : newlyCreatedLines)
+                        deleteLine(createdLine);
+                    return;
+                }
+                newlyCreatedLines.push_back(line);
             }
 
             polygonLines.push_back(line);
         }
+
+        ensureCounterClockwise(polygonVertices, polygonLines);
     } else {
         std::vector<int> lineIds;
         if (!parseIds(linesLineEdit->text(), lineIds)) {
@@ -902,6 +1026,9 @@ void MainWindow::on_actionAdd_Polygon_triggered()
 
     Polygon *polygon = createPolygon(polygonVertices, polygonLines);
     if (!polygon) {
+        for (Line *line : newlyCreatedLines)
+            deleteLine(line);
+
         QMessageBox::warning(this,
                               tr("Add Polygon"),
                               tr("Failed to create the polygon."));
@@ -1540,7 +1667,7 @@ void MainWindow::handleCreatePolygonFromContextMenu(const QList<QGraphicsItem *>
     if (selectedVertices.size() < 3) {
         QMessageBox::warning(this,
                               tr("Create Polygon"),
-                              tr("Select at least three unique vertices connected by lines."));
+                              tr("Select at least three unique vertices."));
         return;
     }
 
@@ -1562,51 +1689,89 @@ void MainWindow::handleCreatePolygonFromContextMenu(const QList<QGraphicsItem *>
             candidateLines.push_back(line.get());
     }
 
-    if (candidateLines.size() != selectedVertices.size()) {
+    std::vector<Line *> orderedLines;
+    std::vector<Vertex *> orderedVertices;
+    std::vector<Line *> newlyCreatedLines;
+
+    if (candidateLines.size() == selectedVertices.size()) {
+        std::unordered_map<Vertex *, int> degreeCount;
+        degreeCount.reserve(selectedVertices.size());
+        for (Line *line : candidateLines) {
+            if (!line)
+                continue;
+
+            degreeCount[line->startVertex()]++;
+            degreeCount[line->endVertex()]++;
+        }
+
+        for (Vertex *vertex : selectedVertices) {
+            if (degreeCount[vertex] != 2) {
+                QMessageBox::warning(this,
+                                      tr("Create Polygon"),
+                                      tr("Each selected vertex must connect to exactly two selected lines."));
+                return;
+            }
+        }
+
+        if (!orderLinesIntoPolygon(candidateLines, orderedLines, orderedVertices)) {
+            QMessageBox::warning(this,
+                                  tr("Create Polygon"),
+                                  tr("Failed to order the selected vertices into a polygon."));
+            return;
+        }
+    } else if (candidateLines.size() > selectedVertices.size()) {
         QMessageBox::warning(this,
                               tr("Create Polygon"),
                               tr("The selected vertices must be connected by exactly one closed polygon."));
         return;
-    }
-
-    std::unordered_map<Vertex *, int> degreeCount;
-    degreeCount.reserve(selectedVertices.size());
-    for (Line *line : candidateLines) {
-        if (!line)
-            continue;
-
-        degreeCount[line->startVertex()]++;
-        degreeCount[line->endVertex()]++;
-    }
-
-    for (Vertex *vertex : selectedVertices) {
-        if (degreeCount[vertex] != 2) {
+    } else {
+        orderedVertices = sortVerticesCounterClockwise(selectedVertices);
+        if (orderedVertices.size() < 3) {
             QMessageBox::warning(this,
                                   tr("Create Polygon"),
-                                  tr("Each selected vertex must connect to exactly two selected lines."));
+                                  tr("Failed to determine a valid polygon from the selected vertices."));
             return;
         }
-    }
 
-    std::vector<Line *> orderedLines;
-    std::vector<Vertex *> orderedVertices;
+        orderedLines.reserve(orderedVertices.size());
+        newlyCreatedLines.reserve(orderedVertices.size());
+        for (std::size_t i = 0; i < orderedVertices.size(); ++i) {
+            Vertex *startVertex = orderedVertices[i];
+            Vertex *endVertex = orderedVertices[(i + 1) % orderedVertices.size()];
+            Line *line = findLineByVertices(startVertex, endVertex);
+            if (!line) {
+                line = createLine(startVertex, endVertex);
+                if (!line) {
+                    QMessageBox::warning(this,
+                                          tr("Create Polygon"),
+                                          tr("Failed to create a line between vertex %1 and vertex %2.").arg(startVertex->id()).arg(endVertex->id()));
+                    for (Line *createdLine : newlyCreatedLines)
+                        deleteLine(createdLine);
+                    return;
+                }
+                newlyCreatedLines.push_back(line);
+            }
 
-    if (!orderLinesIntoPolygon(candidateLines, orderedLines, orderedVertices)) {
-        QMessageBox::warning(this,
-                              tr("Create Polygon"),
-                              tr("Failed to order the selected vertices into a polygon."));
-        return;
+            orderedLines.push_back(line);
+        }
+
+        ensureCounterClockwise(orderedVertices, orderedLines);
     }
 
     if (orderedLines.size() < 3 || orderedVertices.size() != orderedLines.size()) {
         QMessageBox::warning(this,
                               tr("Create Polygon"),
                               tr("Failed to create a polygon from the selected vertices."));
+        for (Line *line : newlyCreatedLines)
+            deleteLine(line);
         return;
     }
 
     Polygon *polygon = createPolygon(orderedVertices, orderedLines);
     if (!polygon) {
+        for (Line *line : newlyCreatedLines)
+            deleteLine(line);
+
         QMessageBox::warning(this,
                               tr("Create Polygon"),
                               tr("Failed to create the polygon."));
