@@ -7,11 +7,13 @@
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QGraphicsScene>
 #include <QGraphicsItem>
 #include <QGraphicsView>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QRadioButton>
 #include <QPainter>
 #include <QRectF>
 #include <QStringList>
@@ -19,6 +21,9 @@
 #include <QColor>
 #include <QPixmap>
 #include <QImage>
+#include <QSpinBox>
+#include <QStackedWidget>
+#include <QVBoxLayout>
 #include <QSplitter>
 
 #include <algorithm>
@@ -200,6 +205,141 @@ void MainWindow::on_actionDelete_All_Vertices_triggered()
         m_vertices.clear();
         resetSelectionLabels();
     }
+}
+
+void MainWindow::on_actionFind_Vertex_triggered()
+{
+    if (m_vertices.empty()) {
+        QMessageBox::information(this,
+                                 tr("Find Vertex"),
+                                 tr("There are no vertices to select."));
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Find Vertex"));
+
+    auto *mainLayout = new QVBoxLayout(&dialog);
+
+    auto *modeGroup = new QGroupBox(tr("Search Mode"), &dialog);
+    auto *modeLayout = new QVBoxLayout(modeGroup);
+    auto *idRadio = new QRadioButton(tr("By ID"), modeGroup);
+    auto *positionRadio = new QRadioButton(tr("By Position"), modeGroup);
+    idRadio->setChecked(true);
+    modeLayout->addWidget(idRadio);
+    modeLayout->addWidget(positionRadio);
+    modeGroup->setLayout(modeLayout);
+
+    auto *stack = new QStackedWidget(&dialog);
+
+    auto *idWidget = new QWidget(&dialog);
+    auto *idLayout = new QFormLayout(idWidget);
+    auto *idSpinBox = new QSpinBox(idWidget);
+    int maxId = 0;
+    for (const auto &vertex : m_vertices) {
+        maxId = std::max(maxId, vertex ? vertex->id() : 0);
+    }
+    idSpinBox->setRange(0, std::max(0, maxId));
+    idLayout->addRow(tr("Vertex ID:"), idSpinBox);
+    idWidget->setLayout(idLayout);
+    stack->addWidget(idWidget);
+
+    auto *positionWidget = new QWidget(&dialog);
+    auto *positionLayout = new QFormLayout(positionWidget);
+    auto *xSpinBox = new QDoubleSpinBox(positionWidget);
+    auto *ySpinBox = new QDoubleSpinBox(positionWidget);
+    auto *toleranceSpinBox = new QDoubleSpinBox(positionWidget);
+
+    const QRectF sceneRect = m_scene ? m_scene->sceneRect() : QRectF();
+    xSpinBox->setRange(sceneRect.left(), sceneRect.right());
+    ySpinBox->setRange(sceneRect.top(), sceneRect.bottom());
+    xSpinBox->setDecimals(2);
+    ySpinBox->setDecimals(2);
+
+    toleranceSpinBox->setRange(0.0, 1000.0);
+    toleranceSpinBox->setDecimals(2);
+    toleranceSpinBox->setSingleStep(0.1);
+    toleranceSpinBox->setValue(0.5);
+
+    positionLayout->addRow(tr("X position:"), xSpinBox);
+    positionLayout->addRow(tr("Y position:"), ySpinBox);
+    positionLayout->addRow(tr("Tolerance:"), toleranceSpinBox);
+    positionWidget->setLayout(positionLayout);
+    stack->addWidget(positionWidget);
+
+    QObject::connect(idRadio, &QRadioButton::toggled, stack, [stack, idRadio](bool checked) {
+        if (checked)
+            stack->setCurrentIndex(0);
+    });
+    QObject::connect(positionRadio, &QRadioButton::toggled, stack, [stack](bool checked) {
+        if (checked)
+            stack->setCurrentIndex(1);
+    });
+
+    stack->setCurrentIndex(0);
+
+    mainLayout->addWidget(modeGroup);
+    mainLayout->addWidget(stack);
+
+    auto *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                           Qt::Horizontal,
+                                           &dialog);
+    mainLayout->addWidget(buttonBox);
+
+    QObject::connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    Vertex *selectedVertex = nullptr;
+
+    const int idToFind = idSpinBox->value();
+    const QPointF positionToFind(xSpinBox->value(), ySpinBox->value());
+    const double tolerance = toleranceSpinBox->value();
+
+    const auto findById = [idToFind](const std::unique_ptr<Vertex> &vertex) {
+        return vertex && vertex->id() == idToFind;
+    };
+
+    auto it = std::find_if(m_vertices.begin(), m_vertices.end(), findById);
+    if (it != m_vertices.end()) {
+        selectedVertex = it->get();
+    }
+
+    if (!selectedVertex) {
+        const auto findByPosition = [positionToFind, tolerance](const std::unique_ptr<Vertex> &vertex) {
+            if (!vertex)
+                return false;
+
+            const QPointF vertexPos = vertex->graphicsItem() ? vertex->graphicsItem()->scenePos() : vertex->position();
+            const qreal dx = vertexPos.x() - positionToFind.x();
+            const qreal dy = vertexPos.y() - positionToFind.y();
+            const qreal distanceSquared = dx * dx + dy * dy;
+            return distanceSquared <= tolerance * tolerance;
+        };
+
+        it = std::find_if(m_vertices.begin(), m_vertices.end(), findByPosition);
+        if (it != m_vertices.end())
+            selectedVertex = it->get();
+    }
+
+    if (!selectedVertex) {
+        QMessageBox::information(this,
+                                 tr("Find Vertex"),
+                                 tr("No vertex matched the provided criteria."));
+        return;
+    }
+
+    if (m_scene) {
+        m_scene->clearSelection();
+        if (QGraphicsItem *item = selectedVertex->graphicsItem()) {
+            item->setSelected(true);
+            ui->graphicsView->centerOn(item);
+        }
+    }
+
+    updateSelectionLabels(selectedVertex);
 }
 
 void MainWindow::onSceneSelectionChanged()

@@ -32,6 +32,7 @@ private slots:
     void on_actionAdd_Vertex_triggered();
     void on_actionDelete_Vertex_triggered();
     void on_actionDelete_All_Vertices_triggered();
+    void on_actionFind_Vertex_triggered();
     void on_actionCustom_Canvas_triggered();
     void onSceneSelectionChanged();
     void onSceneChanged(const QList<QRectF> &region);
