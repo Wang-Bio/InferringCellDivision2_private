@@ -4,7 +4,7 @@
 #include <QPointF>
 
 class QGraphicsScene;
-class QGraphicsEllipseItem;
+class VertexGraphicsItem;
 
 class Vertex
 {
@@ -18,12 +18,15 @@ public:
 
 private:
     void updateGraphicsItem();
+    void updatePositionFromGraphicsItem(const QPointF &position);
 
     int m_id;
     QPointF m_position;
     QGraphicsScene *m_scene;
-    QGraphicsEllipseItem *m_item;
+    VertexGraphicsItem *m_item;
     qreal m_radius;
+
+    friend class VertexGraphicsItem;
 };
 
 #endif // VERTEX_H

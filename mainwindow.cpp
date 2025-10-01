@@ -246,8 +246,8 @@ void MainWindow::on_actionCustom_Canvas_triggered()
 
     m_scene->setSceneRect(0.0, 0.0, static_cast<qreal>(width), static_cast<qreal>(height));
     ui->graphicsView->setSceneRect(m_scene->sceneRect());
-    if (ui->label_6) {
-        ui->label_6->setText(tr("%1 x %2").arg(width).arg(height));
+    if (ui->label_canvas_size) {
+        ui->label_canvas_size->setText(tr("%1 x %2").arg(width).arg(height));
     }
 
     m_vertices.clear();

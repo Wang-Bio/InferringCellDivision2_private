@@ -1,10 +1,53 @@
 #include "vertex.h"
 
-#include <QGraphicsEllipseItem>
 #include <QGraphicsScene>
+#include <QGraphicsEllipseItem>
 #include <QPen>
 #include <QBrush>
 #include <QRectF>
+#include <QGraphicsSceneMouseEvent>
+#include <QCursor>
+
+class VertexGraphicsItem : public QGraphicsEllipseItem
+{
+public:
+    VertexGraphicsItem(Vertex *vertex, qreal radius)
+        : QGraphicsEllipseItem(-radius, -radius, radius * 2, radius * 2)
+        , m_vertex(vertex)
+    {
+        setBrush(QBrush(Qt::yellow));
+        setPen(QPen(Qt::NoPen));
+        setZValue(1.0);
+        setFlag(QGraphicsItem::ItemIsSelectable);
+        setFlag(QGraphicsItem::ItemIsMovable);
+        setFlag(QGraphicsItem::ItemSendsScenePositionChanges);
+        setCursor(Qt::OpenHandCursor);
+    }
+
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override
+    {
+        if (change == QGraphicsItem::ItemPositionHasChanged && m_vertex) {
+            m_vertex->updatePositionFromGraphicsItem(pos());
+        }
+        return QGraphicsEllipseItem::itemChange(change, value);
+    }
+
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override
+    {
+        setCursor(Qt::ClosedHandCursor);
+        QGraphicsEllipseItem::mousePressEvent(event);
+    }
+
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override
+    {
+        setCursor(Qt::OpenHandCursor);
+        QGraphicsEllipseItem::mouseReleaseEvent(event);
+    }
+
+private:
+    Vertex *m_vertex = nullptr;
+};
 
 Vertex::Vertex(int id, const QPointF &position, QGraphicsScene *scene, qreal radius)
     : m_id(id)
@@ -14,11 +57,9 @@ Vertex::Vertex(int id, const QPointF &position, QGraphicsScene *scene, qreal rad
     , m_radius(radius)
 {
     if (m_scene) {
-        m_item = m_scene->addEllipse(0, 0, 0, 0, QPen(Qt::NoPen), QBrush(Qt::yellow));
-        if (m_item) {
-            m_item->setZValue(1.0);
-            updateGraphicsItem();
-        }
+        m_item = new VertexGraphicsItem(this, m_radius);
+        m_scene->addItem(m_item);
+        updateGraphicsItem();
     }
 }
 
@@ -52,9 +93,11 @@ void Vertex::updateGraphicsItem()
     if (!m_item)
         return;
 
-    const QRectF rect(m_position.x() - m_radius,
-                      m_position.y() - m_radius,
-                      m_radius * 2,
-                      m_radius * 2);
-    m_item->setRect(rect);
+    m_item->setRect(-m_radius, -m_radius, m_radius * 2, m_radius * 2);
+    m_item->setPos(m_position);
+}
+
+void Vertex::updatePositionFromGraphicsItem(const QPointF &position)
+{
+    m_position = position;
 }
