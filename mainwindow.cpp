@@ -385,6 +385,19 @@ Line *MainWindow::findLineById(int id) const
     return nullptr;
 }
 
+Polygon *MainWindow::findPolygonById(int id) const
+{
+    const auto it = std::find_if(m_polygons.begin(), m_polygons.end(),
+                                 [id](const std::unique_ptr<Polygon> &polygon) {
+                                     return polygon && polygon->id() == id;
+                                 });
+
+    if (it != m_polygons.end())
+        return it->get();
+
+    return nullptr;
+}
+
 Line *MainWindow::findLineByVertices(Vertex *startVertex, Vertex *endVertex) const
 {
     if (!startVertex || !endVertex)
@@ -921,6 +934,64 @@ void MainWindow::on_actionFind_Line_triggered()
     updateSelectionLabels(line);
 }
 
+void MainWindow::on_actionFind_Polygon_triggered()
+{
+    if (m_polygons.empty()) {
+        QMessageBox::information(this,
+                                 tr("Find Polygon"),
+                                 tr("There are no polygons to select."));
+        return;
+    }
+
+    int maxId = 0;
+    bool hasPolygon = false;
+    for (const auto &polygon : m_polygons) {
+        if (polygon) {
+            maxId = std::max(maxId, polygon->id());
+            hasPolygon = true;
+        }
+    }
+
+    if (!hasPolygon) {
+        QMessageBox::information(this,
+                                 tr("Find Polygon"),
+                                 tr("There are no polygons to select."));
+        return;
+    }
+
+    bool ok = false;
+    const int idToFind = QInputDialog::getInt(this,
+                                              tr("Find Polygon"),
+                                              tr("Enter the polygon ID:"),
+                                              0,
+                                              0,
+                                              std::max(0, maxId),
+                                              1,
+                                              &ok);
+
+    if (!ok)
+        return;
+
+    Polygon *polygon = findPolygonById(idToFind);
+    if (!polygon) {
+        QMessageBox::warning(this,
+                              tr("Find Polygon"),
+                              tr("No polygon with ID %1 was found.").arg(idToFind));
+        return;
+    }
+
+    if (m_scene)
+        m_scene->clearSelection();
+
+    if (QGraphicsItem *item = polygon->graphicsItem()) {
+        item->setSelected(true);
+        if (ui->graphicsView)
+            ui->graphicsView->centerOn(item);
+    }
+
+    updateSelectionLabels(polygon);
+}
+
 void MainWindow::on_actionDelete_Vertex_triggered()
 {
     if (m_vertices.empty()) {
@@ -1027,6 +1098,59 @@ void MainWindow::on_actionDelete_Line_triggered()
         m_scene->clearSelection();
 
     deleteLine(line);
+    resetSelectionLabels();
+}
+
+void MainWindow::on_actionDelete_Polygon_triggered()
+{
+    if (m_polygons.empty()) {
+        QMessageBox::information(this,
+                                 tr("Delete Polygon"),
+                                 tr("There are no polygons to delete."));
+        return;
+    }
+
+    int maxId = 0;
+    bool hasPolygon = false;
+    for (const auto &polygon : m_polygons) {
+        if (polygon) {
+            maxId = std::max(maxId, polygon->id());
+            hasPolygon = true;
+        }
+    }
+
+    if (!hasPolygon) {
+        QMessageBox::information(this,
+                                 tr("Delete Polygon"),
+                                 tr("There are no polygons to delete."));
+        return;
+    }
+
+    bool ok = false;
+    const int idToDelete = QInputDialog::getInt(this,
+                                                tr("Delete Polygon"),
+                                                tr("Enter the polygon ID:"),
+                                                0,
+                                                0,
+                                                std::max(0, maxId),
+                                                1,
+                                                &ok);
+
+    if (!ok)
+        return;
+
+    Polygon *polygon = findPolygonById(idToDelete);
+    if (!polygon) {
+        QMessageBox::warning(this,
+                              tr("Delete Polygon"),
+                              tr("No polygon with ID %1 was found.").arg(idToDelete));
+        return;
+    }
+
+    if (m_scene)
+        m_scene->clearSelection();
+
+    deletePolygon(polygon);
     resetSelectionLabels();
 }
 

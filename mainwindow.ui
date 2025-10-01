@@ -153,6 +153,7 @@
     <addaction name="actionAdd_Line"/>
     <addaction name="actionAdd_Polygon"/>
     <addaction name="actionDelete_Line"/>
+    <addaction name="actionDelete_Polygon"/>
     <addaction name="actionDelete_All_Vertices"/>
     <addaction name="actionDelete_All_Lines"/>
    </widget>
@@ -162,6 +163,7 @@
     </property>
     <addaction name="actionFind_Vertex"/>
     <addaction name="actionFind_Line"/>
+    <addaction name="actionFind_Polygon"/>
    </widget>
    <widget class="QMenu" name="menuExport">
    <property name="title">
@@ -216,6 +218,16 @@
   <action name="actionAdd_Line">
    <property name="text">
     <string>Add Line</string>
+   </property>
+  </action>
+  <action name="actionDelete_Polygon">
+   <property name="text">
+    <string>Delete Polygon</string>
+   </property>
+  </action>
+  <action name="actionFind_Polygon">
+   <property name="text">
+    <string>Find Polygon</string>
    </property>
   </action>
   <action name="actionAdd_Polygon">

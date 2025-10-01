@@ -37,8 +37,10 @@ private slots:
     void on_actionDelete_All_Vertices_triggered();
     void on_actionFind_Vertex_triggered();
     void on_actionFind_Line_triggered();
+    void on_actionFind_Polygon_triggered();
     void on_actionAdd_Line_triggered();
     void on_actionDelete_Line_triggered();
+    void on_actionDelete_Polygon_triggered();
     void on_actionDelete_All_Lines_triggered();
     void on_actionAdd_Polygon_triggered();
     void on_actionCell_Contour_Image_triggered();
@@ -70,6 +72,7 @@ private:
     Line *findLineByGraphicsItem(const QGraphicsItem *item) const;
     Line *findLineById(int id) const;
     Line *findLineByVertices(Vertex *startVertex, Vertex *endVertex) const;
+    Polygon *findPolygonById(int id) const;
     void resetSelectionLabels();
     void updateSelectionLabels(Vertex *vertex);
     void updateSelectionLabels(Line *line);
