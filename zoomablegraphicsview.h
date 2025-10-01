@@ -2,6 +2,9 @@
 #define ZOOMABLEGRAPHICSVIEW_H
 
 #include <QGraphicsView>
+#include <QPointF>
+
+class QContextMenuEvent;
 
 class ZoomableGraphicsView : public QGraphicsView
 {
@@ -10,8 +13,12 @@ class ZoomableGraphicsView : public QGraphicsView
 public:
     explicit ZoomableGraphicsView(QWidget *parent = nullptr);
 
+signals:
+    void addVertexRequested(const QPointF &scenePosition);
+
 protected:
     void wheelEvent(QWheelEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
     void applyZoomFactor(double factor);

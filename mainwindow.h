@@ -37,6 +37,7 @@ private slots:
     void on_actionCustom_Canvas_triggered();
     void onSceneSelectionChanged();
     void onSceneChanged(const QList<QRectF> &region);
+    void handleAddVertexFromContextMenu(const QPointF &scenePosition);
 
 private:
     Vertex *createVertex(const QPointF &position);

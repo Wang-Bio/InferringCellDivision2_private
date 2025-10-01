@@ -63,6 +63,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->graphicsView->setScene(m_scene);
     ui->graphicsView->setRenderHint(QPainter::Antialiasing);
+
+    if (auto *zoomableView = qobject_cast<ZoomableGraphicsView *>(ui->graphicsView)) {
+        connect(zoomableView,
+                &ZoomableGraphicsView::addVertexRequested,
+                this,
+                &MainWindow::handleAddVertexFromContextMenu);
+    }
 }
 
 MainWindow::~MainWindow()
@@ -376,6 +383,26 @@ void MainWindow::onSceneChanged(const QList<QRectF> & /*region*/)
     if (Vertex *vertex = findVertexByGraphicsItem(selectedItems.first())) {
         updateSelectionLabels(vertex);
     }
+}
+
+void MainWindow::handleAddVertexFromContextMenu(const QPointF &scenePosition)
+{
+    if (!m_scene)
+        return;
+
+    if (!m_scene->sceneRect().contains(scenePosition))
+        return;
+
+    Vertex *vertex = createVertex(scenePosition);
+    if (!vertex)
+        return;
+
+    if (QGraphicsItem *item = vertex->graphicsItem()) {
+        m_scene->clearSelection();
+        item->setSelected(true);
+    }
+
+    updateSelectionLabels(vertex);
 }
 
 Vertex *MainWindow::findVertexByGraphicsItem(const QGraphicsItem *item) const
