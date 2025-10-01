@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "vertex.h"
+#include "zoomablegraphicsview.h"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -17,6 +18,7 @@
 #include <QColor>
 #include <QPixmap>
 #include <QImage>
+#include <QSplitter>
 
 #include <algorithm>
 
@@ -27,7 +29,23 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
 
     m_scene = new QGraphicsScene(this);
-    m_scene->setSceneRect(0, 0, 800, 600);
+    m_scene->setSceneRect(0, 0, 512, 512);
+
+    if (auto *splitter = qobject_cast<QSplitter *>(ui->graphicsView->parentWidget())) {
+        const int index = splitter->indexOf(ui->graphicsView);
+        if (index >= 0) {
+            auto *originalView = ui->graphicsView;
+            auto *zoomableView = new ZoomableGraphicsView(splitter);
+            zoomableView->setObjectName(originalView->objectName());
+            zoomableView->setSizePolicy(originalView->sizePolicy());
+            zoomableView->setMinimumSize(originalView->minimumSize());
+            zoomableView->setMaximumSize(originalView->maximumSize());
+            splitter->replaceWidget(index, zoomableView);
+            originalView->deleteLater();
+            ui->graphicsView = zoomableView;
+        }
+    }
+
     ui->graphicsView->setScene(m_scene);
     ui->graphicsView->setRenderHint(QPainter::Antialiasing);
 }
@@ -199,17 +217,17 @@ void MainWindow::on_actionCustom_Canvas_triggered()
 
     auto *redSpinBox = new QSpinBox(&dialog);
     redSpinBox->setRange(0, 255);
-    redSpinBox->setValue(255);
+    redSpinBox->setValue(0);
     layout->addRow(tr("Red (0-255):"), redSpinBox);
 
     auto *greenSpinBox = new QSpinBox(&dialog);
     greenSpinBox->setRange(0, 255);
-    greenSpinBox->setValue(255);
+    greenSpinBox->setValue(0);
     layout->addRow(tr("Green (0-255):"), greenSpinBox);
 
     auto *blueSpinBox = new QSpinBox(&dialog);
     blueSpinBox->setRange(0, 255);
-    blueSpinBox->setValue(255);
+    blueSpinBox->setValue(0);
     layout->addRow(tr("Blue (0-255):"), blueSpinBox);
 
     auto *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,

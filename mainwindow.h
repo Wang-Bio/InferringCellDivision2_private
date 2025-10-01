@@ -7,6 +7,7 @@
 #include <vector>
 
 class QGraphicsScene;
+class ZoomableGraphicsView;
 class Vertex;
 class QGraphicsPixmapItem;
 

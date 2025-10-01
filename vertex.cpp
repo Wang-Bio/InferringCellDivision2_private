@@ -21,6 +21,7 @@ public:
         setFlag(QGraphicsItem::ItemIsSelectable);
         setFlag(QGraphicsItem::ItemIsMovable);
         setFlag(QGraphicsItem::ItemSendsScenePositionChanges);
+        setFlag(QGraphicsItem::ItemIgnoresTransformations);
         setCursor(Qt::OpenHandCursor);
     }
 

@@ -11,11 +11,13 @@ CONFIG += c++17
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    vertex.cpp
+    vertex.cpp \
+    zoomablegraphicsview.cpp
 
 HEADERS += \
     mainwindow.h \
-    vertex.h
+    vertex.h \
+    zoomablegraphicsview.h
 
 FORMS += \
     mainwindow.ui

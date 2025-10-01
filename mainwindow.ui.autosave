@@ -30,7 +30,7 @@
          </widget>
         </item>
         <item row="0" column="1">
-         <widget class="QLabel" name="label_input_diretory">
+         <widget class="QLabel" name="label_2">
           <property name="text">
            <string>-</string>
           </property>
@@ -44,7 +44,7 @@
          </widget>
         </item>
         <item row="1" column="1">
-         <widget class="QLabel" name="label_input_fileName">
+         <widget class="QLabel" name="label_4">
           <property name="text">
            <string>-</string>
           </property>
@@ -65,9 +65,9 @@
          </widget>
         </item>
         <item row="3" column="0">
-         <widget class="QLabel" name="label_7">
+         <widget class="QLabel" name="label_6">
           <property name="text">
-           <string>Seleted Item</string>
+           <string>Selected Item</string>
           </property>
          </widget>
         </item>
@@ -79,23 +79,30 @@
          </widget>
         </item>
         <item row="4" column="0">
-         <widget class="QLabel" name="label_2">
+         <widget class="QLabel" name="label_8">
           <property name="text">
            <string>Selected Item ID</string>
           </property>
          </widget>
         </item>
         <item row="4" column="1">
-         <widget class="QLabel" name="label_selected_item_ID">
+         <widget class="QLabel" name="label_selected_item_id">
           <property name="text">
            <string>-</string>
           </property>
          </widget>
         </item>
         <item row="5" column="0">
-         <widget class="QLabel" name="label_4">
+         <widget class="QLabel" name="label_10">
           <property name="text">
            <string>Selected Item Pos</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="1">
+         <widget class="QLabel" name="label_selected_item_pos">
+          <property name="text">
+           <string>-</string>
           </property>
          </widget>
         </item>
