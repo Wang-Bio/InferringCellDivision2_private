@@ -5,6 +5,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsLineItem>
 #include <QGraphicsPixmapItem>
+#include <QList>
 #include <QMenu>
 #include <QWheelEvent>
 #include <QtGlobal>
@@ -83,11 +84,34 @@ void ZoomableGraphicsView::contextMenuEvent(QContextMenuEvent *event)
 
         if (isSelectableVertex) {
             QMenu menu(this);
+            QAction *createLineAction = nullptr;
+            QList<QGraphicsItem *> selectedVertices;
+
+            if (scene()) {
+                const QList<QGraphicsItem *> selectedItems = scene()->selectedItems();
+                for (QGraphicsItem *selectedItem : selectedItems) {
+                    if (!selectedItem)
+                        continue;
+
+                    const bool isSelectedVertex = selectedItem->type() == QGraphicsEllipseItem::Type
+                                                   && selectedItem->flags().testFlag(QGraphicsItem::ItemIsSelectable);
+
+                    if (isSelectedVertex)
+                        selectedVertices.append(selectedItem);
+                }
+
+                if (selectedVertices.size() == 2 && selectedVertices.contains(itemUnderCursor))
+                    createLineAction = menu.addAction(tr("Create line between vertices"));
+            }
+
             QAction *deleteVertexAction = menu.addAction(tr("Delete vertex"));
             QAction *selectedAction = menu.exec(event->globalPos());
 
-            if (selectedAction == deleteVertexAction)
+            if (selectedAction == deleteVertexAction) {
                 emit deleteVertexRequested(itemUnderCursor);
+            } else if (selectedAction == createLineAction && selectedVertices.size() == 2) {
+                emit createLineRequested(selectedVertices.at(0), selectedVertices.at(1));
+            }
             return;
         }
 

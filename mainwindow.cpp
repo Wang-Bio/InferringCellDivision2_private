@@ -86,6 +86,10 @@ MainWindow::MainWindow(QWidget *parent)
                 &ZoomableGraphicsView::deleteLineRequested,
                 this,
                 &MainWindow::handleDeleteLineFromContextMenu);
+        connect(zoomableView,
+                &ZoomableGraphicsView::createLineRequested,
+                this,
+                &MainWindow::handleCreateLineFromContextMenu);
     }
 }
 
@@ -812,6 +816,39 @@ void MainWindow::handleDeleteLineFromContextMenu(QGraphicsItem *lineItem)
         deleteLine(line);
         resetSelectionLabels();
     }
+}
+
+void MainWindow::handleCreateLineFromContextMenu(QGraphicsItem *firstVertexItem, QGraphicsItem *secondVertexItem)
+{
+    if (!m_scene || !firstVertexItem || !secondVertexItem || firstVertexItem == secondVertexItem)
+        return;
+
+    Vertex *firstVertex = findVertexByGraphicsItem(firstVertexItem);
+    Vertex *secondVertex = findVertexByGraphicsItem(secondVertexItem);
+
+    if (!firstVertex || !secondVertex)
+        return;
+
+    if (Line *existingLine = findLineByVertices(firstVertex, secondVertex)) {
+        if (QGraphicsItem *existingLineItem = existingLine->graphicsItem()) {
+            m_scene->clearSelection();
+            existingLineItem->setSelected(true);
+        }
+
+        updateSelectionLabels(existingLine);
+        return;
+    }
+
+    Line *line = createLine(firstVertex, secondVertex);
+    if (!line)
+        return;
+
+    if (QGraphicsItem *lineGraphicsItem = line->graphicsItem()) {
+        m_scene->clearSelection();
+        lineGraphicsItem->setSelected(true);
+    }
+
+    updateSelectionLabels(line);
 }
 
 Vertex *MainWindow::findVertexByGraphicsItem(const QGraphicsItem *item) const

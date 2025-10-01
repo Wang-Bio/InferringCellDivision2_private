@@ -50,6 +50,7 @@ private slots:
     void handleAddVertexFromContextMenu(const QPointF &scenePosition);
     void handleDeleteVertexFromContextMenu(QGraphicsItem *vertexItem);
     void handleDeleteLineFromContextMenu(QGraphicsItem *lineItem);
+    void handleCreateLineFromContextMenu(QGraphicsItem *firstVertexItem, QGraphicsItem *secondVertexItem);
 
 private:
     Vertex *createVertex(const QPointF &position);

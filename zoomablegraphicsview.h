@@ -18,6 +18,7 @@ signals:
     void addVertexRequested(const QPointF &scenePosition);
     void deleteVertexRequested(QGraphicsItem *vertexItem);
     void deleteLineRequested(QGraphicsItem *lineItem);
+    void createLineRequested(QGraphicsItem *firstVertexItem, QGraphicsItem *secondVertexItem);
 
 protected:
     void wheelEvent(QWheelEvent *event) override;
