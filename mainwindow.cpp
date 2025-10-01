@@ -25,6 +25,9 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QSplitter>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QDir>
 
 #include <algorithm>
 
@@ -413,6 +416,57 @@ void MainWindow::updateSelectionLabels(Vertex *vertex)
     const QString yText = QString::number(pos.y(), 'f', 2);
     ui->label_selected_item_pos->setText(tr("(%1, %2)").arg(xText, yText));
 }
+
+void MainWindow::on_actionCell_Contour_Image_triggered()
+{
+    if (!m_scene)
+        return;
+
+    const QString filePath = QFileDialog::getOpenFileName(this,
+                                                          tr("Open Image"),
+                                                          QString(),
+                                                          tr("Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"));
+
+    if (filePath.isEmpty())
+        return;
+
+    const QPixmap pixmap(filePath);
+    if (pixmap.isNull()) {
+        QMessageBox::warning(this,
+                             tr("Open Image"),
+                             tr("Failed to load image: %1").arg(QDir::toNativeSeparators(filePath)));
+        return;
+    }
+
+    if (m_backgroundItem) {
+        m_scene->removeItem(m_backgroundItem);
+        delete m_backgroundItem;
+        m_backgroundItem = nullptr;
+    }
+
+    m_scene->clearSelection();
+    m_vertices.clear();
+
+    m_backgroundItem = m_scene->addPixmap(pixmap);
+    if (m_backgroundItem) {
+        m_backgroundItem->setZValue(-1.0);
+        m_backgroundItem->setPos(0.0, 0.0);
+    }
+
+    m_scene->setSceneRect(pixmap.rect());
+    ui->graphicsView->setSceneRect(m_scene->sceneRect());
+
+    const QFileInfo fileInfo(filePath);
+    if (ui->label_2)
+        ui->label_2->setText(QDir::toNativeSeparators(fileInfo.absolutePath()));
+    if (ui->label_4)
+        ui->label_4->setText(fileInfo.fileName());
+    if (ui->label_canvas_size)
+        ui->label_canvas_size->setText(tr("%1 x %2").arg(pixmap.width()).arg(pixmap.height()));
+
+    resetSelectionLabels();
+}
+
 
 
 
