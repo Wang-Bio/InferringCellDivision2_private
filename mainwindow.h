@@ -29,6 +29,7 @@ public:
     ~MainWindow();
 
 private slots:
+    void on_actionDelete_Image_triggered();
     void on_actionAdd_Vertex_triggered();
     void on_actionDelete_Vertex_triggered();
     void on_actionDelete_All_Vertices_triggered();

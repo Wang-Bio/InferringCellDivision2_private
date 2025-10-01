@@ -147,6 +147,7 @@
      <string>Edit</string>
     </property>
     <addaction name="actionMannual_Edit_Mode"/>
+    <addaction name="actionDelete_Image"/>
     <addaction name="actionAdd_Vertex"/>
     <addaction name="actionDelete_Vertex"/>
     <addaction name="actionDelete_All_Vertices"/>
@@ -230,6 +231,11 @@
   <action name="actionCustom_Canvas">
    <property name="text">
     <string>Custom Canvas</string>
+   </property>
+  </action>
+  <action name="actionDelete_Image">
+   <property name="text">
+    <string>Delete Image</string>
    </property>
   </action>
  </widget>

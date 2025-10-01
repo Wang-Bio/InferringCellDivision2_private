@@ -130,6 +130,32 @@ void MainWindow::sortVerticesById()
               });
 }
 
+void MainWindow::on_actionDelete_Image_triggered(){
+    if (!m_scene)
+        return;
+
+    if (m_backgroundItem) {
+        m_scene->removeItem(m_backgroundItem);
+        delete m_backgroundItem;
+        m_backgroundItem = nullptr;
+    }
+
+    m_scene->clearSelection();
+    m_vertices.clear();
+
+    m_scene->setSceneRect(0.0, 0.0, 512.0, 512.0);
+    ui->graphicsView->setSceneRect(m_scene->sceneRect());
+
+    if (ui->label_2)
+        ui->label_2->setText(tr("-"));
+    if (ui->label_4)
+        ui->label_4->setText(tr("-"));
+    if (ui->label_canvas_size)
+        ui->label_canvas_size->setText(tr("-"));
+
+    resetSelectionLabels();
+}
+
 void MainWindow::on_actionAdd_Vertex_triggered()
 {
     if (!m_scene)
