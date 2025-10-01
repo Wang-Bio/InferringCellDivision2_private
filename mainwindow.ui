@@ -187,6 +187,12 @@
      <string>Display</string>
     </property>
    </widget>
+   <widget class="QMenu" name="menuTest">
+    <property name="title">
+     <string>Test</string>
+    </property>
+    <addaction name="actiontest_vertices_lines_polygons"/>
+   </widget>
    <addaction name="menuOpen"/>
    <addaction name="menuProcess"/>
    <addaction name="menuEdit"/>
@@ -194,6 +200,7 @@
    <addaction name="menuImport"/>
    <addaction name="menuExport"/>
    <addaction name="menuDisplay"/>
+   <addaction name="menuTest"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSkeletonization">
@@ -309,6 +316,11 @@
   <action name="actionDelete_All_Lines">
    <property name="text">
     <string>Delete All Lines</string>
+   </property>
+  </action>
+  <action name="actiontest_vertices_lines_polygons">
+   <property name="text">
+    <string>test-vertices/lines/polygons</string>
    </property>
   </action>
   <action name="actionFind_Line">

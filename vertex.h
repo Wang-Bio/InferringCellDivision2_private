@@ -24,6 +24,8 @@ public:
     void removeConnectedLine(Line *line);
     void addConnectedPolygon(Polygon *polygon);
     void removeConnectedPolygon(Polygon *polygon);
+    const std::vector<Line *> &connectedLines() const;
+    const std::vector<Polygon *> &connectedPolygons() const;
 
 private:
     void updateGraphicsItem();

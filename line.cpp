@@ -1,12 +1,14 @@
 #include "line.h"
 
 #include "vertex.h"
+#include "polygon.h"
 
 #include <QGraphicsLineItem>
 #include <QGraphicsScene>
 #include <QLineF>
 #include <QPen>
 #include <QVariant>
+#include <algorithm>
 
 namespace
 {
@@ -59,6 +61,13 @@ Line::Line(int id, Vertex *startVertex, Vertex *endVertex, QGraphicsScene *scene
 
 Line::~Line()
 {
+    auto polygons = m_polygons;
+    for (Polygon *polygon : polygons) {
+        if (polygon)
+            polygon->removeLine(this);
+    }
+    m_polygons.clear();
+
     if (m_startVertex)
         m_startVertex->removeConnectedLine(this);
     if (m_endVertex)
@@ -105,4 +114,25 @@ void Line::updatePosition()
 bool Line::involvesVertex(const Vertex *vertex) const
 {
     return vertex && (vertex == m_startVertex || vertex == m_endVertex);
+}
+
+void Line::addConnectedPolygon(Polygon *polygon)
+{
+    if (!polygon)
+        return;
+
+    if (std::find(m_polygons.begin(), m_polygons.end(), polygon) == m_polygons.end())
+        m_polygons.push_back(polygon);
+}
+
+void Line::removeConnectedPolygon(Polygon *polygon)
+{
+    const auto it = std::remove(m_polygons.begin(), m_polygons.end(), polygon);
+    if (it != m_polygons.end())
+        m_polygons.erase(it, m_polygons.end());
+}
+
+const std::vector<Polygon *> &Line::connectedPolygons() const
+{
+    return m_polygons;
 }

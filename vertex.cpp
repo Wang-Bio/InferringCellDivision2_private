@@ -132,6 +132,16 @@ void Vertex::removeConnectedPolygon(Polygon *polygon)
         m_polygons.erase(it, m_polygons.end());
 }
 
+const std::vector<Line *> &Vertex::connectedLines() const
+{
+    return m_lines;
+}
+
+const std::vector<Polygon *> &Vertex::connectedPolygons() const
+{
+    return m_polygons;
+}
+
 void Vertex::updateGraphicsItem()
 {
     if (!m_item)

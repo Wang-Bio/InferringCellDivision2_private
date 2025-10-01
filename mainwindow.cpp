@@ -43,6 +43,8 @@
 #include <QJsonValue>
 #include <QLineEdit>
 #include <QRegularExpression>
+#include <QDebug>
+#include <QRandomGenerator>
 
 #include <algorithm>
 #include <set>
@@ -660,6 +662,291 @@ bool MainWindow::orderLinesIntoPolygon(const std::vector<Line *> &inputLines,
     return true;
 }
 
+bool MainWindow::containsVertex(const Vertex *vertex) const
+{
+    return std::any_of(m_vertices.begin(),
+                       m_vertices.end(),
+                       [vertex](const std::unique_ptr<Vertex> &candidate) {
+                           return candidate.get() == vertex;
+                       });
+}
+
+bool MainWindow::containsLine(const Line *line) const
+{
+    return std::any_of(m_lines.begin(),
+                       m_lines.end(),
+                       [line](const std::unique_ptr<Line> &candidate) {
+                           return candidate.get() == line;
+                       });
+}
+
+bool MainWindow::containsPolygon(const Polygon *polygon) const
+{
+    return std::any_of(m_polygons.begin(),
+                       m_polygons.end(),
+                       [polygon](const std::unique_ptr<Polygon> &candidate) {
+                           return candidate.get() == polygon;
+                       });
+}
+
+bool MainWindow::validateRelationships() const
+{
+    bool valid = true;
+
+    for (const auto &vertexPtr : m_vertices) {
+        Vertex *vertex = vertexPtr.get();
+        if (!vertex)
+            continue;
+
+        for (Line *line : vertex->connectedLines()) {
+            if (!line)
+                continue;
+
+            if (!containsLine(line)) {
+                qWarning() << "Vertex" << vertex->id() << "references an unknown line";
+                valid = false;
+                continue;
+            }
+
+            if (line->startVertex() != vertex && line->endVertex() != vertex) {
+                qWarning() << "Vertex" << vertex->id() << "is linked to line" << line->id()
+                           << "that does not include it.";
+                valid = false;
+            }
+        }
+
+        for (Polygon *polygon : vertex->connectedPolygons()) {
+            if (!polygon)
+                continue;
+
+            if (!containsPolygon(polygon)) {
+                qWarning() << "Vertex" << vertex->id() << "references an unknown polygon";
+                valid = false;
+                continue;
+            }
+
+            if (!polygon->involvesVertex(vertex)) {
+                qWarning() << "Vertex" << vertex->id() << "is linked to polygon" << polygon->id()
+                           << "that does not contain it.";
+                valid = false;
+            }
+        }
+    }
+
+    for (const auto &linePtr : m_lines) {
+        Line *line = linePtr.get();
+        if (!line)
+            continue;
+
+        for (Polygon *polygon : line->connectedPolygons()) {
+            if (!polygon)
+                continue;
+
+            if (!containsPolygon(polygon)) {
+                qWarning() << "Line" << line->id() << "references an unknown polygon";
+                valid = false;
+                continue;
+            }
+
+            if (!polygon->involvesLine(line)) {
+                qWarning() << "Line" << line->id() << "is linked to polygon" << polygon->id()
+                           << "that does not include it.";
+                valid = false;
+            }
+        }
+    }
+
+    for (const auto &polygonPtr : m_polygons) {
+        Polygon *polygon = polygonPtr.get();
+        if (!polygon)
+            continue;
+
+        for (Vertex *vertex : polygon->vertices()) {
+            if (!vertex)
+                continue;
+
+            if (!containsVertex(vertex)) {
+                qWarning() << "Polygon" << polygon->id() << "references an unknown vertex";
+                valid = false;
+                continue;
+            }
+
+            const auto &vertexPolygons = vertex->connectedPolygons();
+            if (std::find(vertexPolygons.begin(), vertexPolygons.end(), polygon) == vertexPolygons.end()) {
+                qWarning() << "Polygon" << polygon->id() << "includes vertex" << vertex->id()
+                           << "that does not reference it back.";
+                valid = false;
+            }
+        }
+
+        for (Line *line : polygon->lines()) {
+            if (!line)
+                continue;
+
+            if (!containsLine(line)) {
+                qWarning() << "Polygon" << polygon->id() << "references an unknown line";
+                valid = false;
+                continue;
+            }
+
+            const auto &linePolygons = line->connectedPolygons();
+            if (std::find(linePolygons.begin(), linePolygons.end(), polygon) == linePolygons.end()) {
+                qWarning() << "Polygon" << polygon->id() << "includes line" << line->id()
+                           << "that does not reference it back.";
+                valid = false;
+            }
+        }
+    }
+
+    return valid;
+}
+
+void MainWindow::runVerticesLinesPolygonsStressTest()
+{
+    if (!m_scene) {
+        qWarning() << "Cannot run stress test without an active scene.";
+        return;
+    }
+
+    const QRectF sceneRect = m_scene->sceneRect().isValid() ? m_scene->sceneRect() : QRectF(0.0, 0.0, 512.0, 512.0);
+    QRandomGenerator rng(QRandomGenerator::global()->generate());
+
+    constexpr int totalRounds = 100;
+    for (int round = 0; round < totalRounds; ++round) {
+        qInfo() << "Stress test round" << (round + 1) << "of" << totalRounds;
+
+        std::vector<Vertex *> initialVertices;
+        const int vertexCount = rng.bounded(5, 11);
+        initialVertices.reserve(vertexCount);
+        for (int i = 0; i < vertexCount; ++i) {
+            const qreal x = sceneRect.left() + sceneRect.width() * rng.generateDouble();
+            const qreal y = sceneRect.top() + sceneRect.height() * rng.generateDouble();
+            if (Vertex *vertex = createVertex(QPointF(x, y)))
+                initialVertices.push_back(vertex);
+        }
+
+        std::vector<Line *> polygonLines;
+        if (initialVertices.size() >= 3) {
+            polygonLines.reserve(initialVertices.size());
+            for (std::size_t i = 0; i < initialVertices.size(); ++i) {
+                Vertex *start = initialVertices[i];
+                Vertex *end = initialVertices[(i + 1) % initialVertices.size()];
+                Line *line = findLineByVertices(start, end);
+                if (!line)
+                    line = createLine(start, end);
+                if (line)
+                    polygonLines.push_back(line);
+            }
+        }
+
+        Polygon *primaryPolygon = nullptr;
+        if (!polygonLines.empty() && polygonLines.size() == initialVertices.size())
+            primaryPolygon = createPolygon(initialVertices, polygonLines);
+
+        if (!validateRelationships())
+            qWarning() << "Detected relationship issues after initial polygon creation.";
+
+        const int extraLines = rng.bounded(0, static_cast<int>(initialVertices.size()));
+        for (int i = 0; i < extraLines; ++i) {
+            if (initialVertices.size() < 2)
+                break;
+
+            Vertex *first = initialVertices[rng.bounded(static_cast<int>(initialVertices.size()))];
+            Vertex *second = initialVertices[rng.bounded(static_cast<int>(initialVertices.size()))];
+            if (first == second)
+                continue;
+
+            if (!findLineByVertices(first, second))
+                createLine(first, second);
+        }
+
+        if (!validateRelationships())
+            qWarning() << "Detected relationship issues after extra lines creation.";
+
+        if (primaryPolygon && rng.bounded(2) == 0 && containsPolygon(primaryPolygon)) {
+            deletePolygon(primaryPolygon);
+            primaryPolygon = nullptr;
+        }
+
+        for (Line *line : polygonLines) {
+            if (!line)
+                continue;
+
+            if (rng.bounded(3) == 0 && containsLine(line))
+                deleteLine(line);
+        }
+
+        for (Vertex *vertex : initialVertices) {
+            if (!vertex)
+                continue;
+
+            if (rng.bounded(4) == 0 && containsVertex(vertex))
+                deleteVertex(vertex);
+        }
+
+        if (!validateRelationships())
+            qWarning() << "Detected relationship issues after deletions.";
+
+        std::vector<Vertex *> additionalVertices;
+        const int additionalCount = rng.bounded(3, 7);
+        additionalVertices.reserve(additionalCount);
+        for (int i = 0; i < additionalCount; ++i) {
+            const qreal x = sceneRect.left() + sceneRect.width() * rng.generateDouble();
+            const qreal y = sceneRect.top() + sceneRect.height() * rng.generateDouble();
+            if (Vertex *vertex = createVertex(QPointF(x, y)))
+                additionalVertices.push_back(vertex);
+        }
+
+        if (additionalVertices.size() >= 2) {
+            std::vector<Vertex *> triangleVertices;
+            triangleVertices.reserve(3);
+            triangleVertices.push_back(additionalVertices.front());
+            triangleVertices.push_back(additionalVertices.back());
+            if (!initialVertices.empty() && containsVertex(initialVertices.front()))
+                triangleVertices.push_back(initialVertices.front());
+            else if (additionalVertices.size() > 2)
+                triangleVertices.push_back(additionalVertices[additionalVertices.size() / 2]);
+
+            std::vector<Line *> triangleLines;
+            triangleLines.reserve(triangleVertices.size());
+            for (std::size_t i = 0; i < triangleVertices.size(); ++i) {
+                Vertex *start = triangleVertices[i];
+                Vertex *end = triangleVertices[(i + 1) % triangleVertices.size()];
+                if (!start || !end)
+                    continue;
+
+                Line *line = findLineByVertices(start, end);
+                if (!line)
+                    line = createLine(start, end);
+                if (line)
+                    triangleLines.push_back(line);
+            }
+
+            if (triangleLines.size() == triangleVertices.size())
+                createPolygon(triangleVertices, triangleLines);
+        }
+
+        if (!validateRelationships())
+            qWarning() << "Detected relationship issues after secondary polygon creation.";
+
+        auto cleanupVertices = [this](const std::vector<Vertex *> &vertices) {
+            for (Vertex *vertex : vertices) {
+                if (vertex && containsVertex(vertex))
+                    deleteVertex(vertex);
+            }
+        };
+
+        cleanupVertices(initialVertices);
+        cleanupVertices(additionalVertices);
+
+        if (!validateRelationships())
+            qWarning() << "Detected relationship issues after cleanup.";
+    }
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Completed vertices/lines/polygons stress test."), 5000);
+}
+
 void MainWindow::on_actionDelete_Image_triggered(){
     if (!m_scene)
         return;
@@ -671,9 +958,9 @@ void MainWindow::on_actionDelete_Image_triggered(){
     }
 
     m_scene->clearSelection();
-    m_vertices.clear();
-    m_lines.clear();
     m_polygons.clear();
+    m_lines.clear();
+    m_vertices.clear();
     m_nextLineId = 0;
     m_nextPolygonId = 0;
 
@@ -1206,9 +1493,9 @@ void MainWindow::on_actionDelete_All_Vertices_triggered()
                                              QMessageBox::No);
 
     if (reply == QMessageBox::Yes) {
-        m_vertices.clear();
-        m_lines.clear();
         m_polygons.clear();
+        m_lines.clear();
+        m_vertices.clear();
         m_nextLineId = 0;
         m_nextPolygonId = 0;
         resetSelectionLabels();
@@ -1342,8 +1629,8 @@ void MainWindow::on_actionDelete_All_Lines_triggered()
     if (m_scene)
         m_scene->clearSelection();
 
-    m_lines.clear();
     m_polygons.clear();
+    m_lines.clear();
     m_nextLineId = 0;
     m_nextPolygonId = 0;
     resetSelectionLabels();
@@ -1900,9 +2187,9 @@ void MainWindow::on_actionCell_Contour_Image_triggered()
     }
 
     m_scene->clearSelection();
-    m_vertices.clear();
-    m_lines.clear();
     m_polygons.clear();
+    m_lines.clear();
+    m_vertices.clear();
     m_nextLineId = 0;
     m_nextPolygonId = 0;
 
@@ -2002,9 +2289,9 @@ void MainWindow::on_actionCustom_Canvas_triggered()
         ui->label_canvas_size->setText(tr("%1 x %2").arg(width).arg(height));
     }
 
-    m_vertices.clear();
-    m_lines.clear();
     m_polygons.clear();
+    m_lines.clear();
+    m_vertices.clear();
     m_nextLineId = 0;
     m_nextPolygonId = 0;
 }
@@ -2130,9 +2417,9 @@ void MainWindow::on_actionImport_Vertex_Only_triggered()
     }
 
     m_scene->clearSelection();
+    m_polygons.clear();
     m_lines.clear();
     m_vertices.clear();
-    m_polygons.clear();
     m_nextLineId = 0;
     m_nextPolygonId = 0;
 
@@ -2292,6 +2579,11 @@ void MainWindow::on_actionSnapShot_View_triggered()
     if (statusBar())
         statusBar()->showMessage(tr("Snapshot saved to %1").arg(QDir::toNativeSeparators(options->filePath)),
                                  5000);
+}
+
+void MainWindow::on_actiontest_vertices_lines_polygons_triggered()
+{
+    runVerticesLinesPolygonsStressTest();
 }
 
 void MainWindow::on_actionImport_Vertex_Line_triggered()
@@ -2545,9 +2837,9 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
     }
 
     m_scene->clearSelection();
+    m_polygons.clear();
     m_lines.clear();
     m_vertices.clear();
-    m_polygons.clear();
     m_nextLineId = 0;
     m_nextPolygonId = 0;
 

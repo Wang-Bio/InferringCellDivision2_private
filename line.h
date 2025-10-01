@@ -3,10 +3,12 @@
 
 #include <QColor>
 #include <QPointF>
+#include <vector>
 
 class QGraphicsItem;
 class QGraphicsScene;
 class Vertex;
+class Polygon;
 
 class Line
 {
@@ -21,6 +23,9 @@ public:
 
     void updatePosition();
     bool involvesVertex(const Vertex *vertex) const;
+    void addConnectedPolygon(Polygon *polygon);
+    void removeConnectedPolygon(Polygon *polygon);
+    const std::vector<Polygon *> &connectedPolygons() const;
 
 private:
     int m_id = -1;
@@ -28,6 +33,7 @@ private:
     Vertex *m_endVertex = nullptr;
     QGraphicsScene *m_scene = nullptr;
     QGraphicsItem *m_item = nullptr;
+    std::vector<Polygon *> m_polygons;
 };
 
 #endif // LINE_H

@@ -53,6 +53,7 @@ private slots:
     void on_actionImport_Vertex_Line_triggered();
     void on_actionSnapShot_All_triggered();
     void on_actionSnapShot_View_triggered();
+    void on_actiontest_vertices_lines_polygons_triggered();
     void onSceneSelectionChanged();
     void onSceneChanged(const QList<QRectF> &region);
     void handleAddVertexFromContextMenu(const QPointF &scenePosition);
@@ -100,5 +101,10 @@ private:
     bool orderLinesIntoPolygon(const std::vector<Line *> &inputLines,
                                std::vector<Line *> &orderedLines,
                                std::vector<Vertex *> &orderedVertices) const;
+    void runVerticesLinesPolygonsStressTest();
+    bool validateRelationships() const;
+    bool containsVertex(const Vertex *vertex) const;
+    bool containsLine(const Line *line) const;
+    bool containsPolygon(const Polygon *polygon) const;
 };
 #endif // MAINWINDOW_H

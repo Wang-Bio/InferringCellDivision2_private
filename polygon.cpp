@@ -50,11 +50,13 @@ Polygon::Polygon(int id,
 
     initializeGraphicsItem();
     attachToVertices();
+    attachToLines();
     updateShape();
 }
 
 Polygon::~Polygon()
 {
+    detachFromLines();
     detachFromVertices();
 
     if (m_scene && m_item)
@@ -114,6 +116,18 @@ bool Polygon::involvesLine(const Line *line) const
     return std::find(m_lines.begin(), m_lines.end(), line) != m_lines.end();
 }
 
+void Polygon::removeLine(Line *line)
+{
+    if (!line)
+        return;
+
+    const auto it = std::remove(m_lines.begin(), m_lines.end(), line);
+    if (it != m_lines.end()) {
+        m_lines.erase(it, m_lines.end());
+        line->removeConnectedPolygon(this);
+    }
+}
+
 void Polygon::attachToVertices()
 {
     for (Vertex *vertex : m_vertices) {
@@ -127,6 +141,22 @@ void Polygon::detachFromVertices()
     for (Vertex *vertex : m_vertices) {
         if (vertex)
             vertex->removeConnectedPolygon(this);
+    }
+}
+
+void Polygon::attachToLines()
+{
+    for (Line *line : m_lines) {
+        if (line)
+            line->addConnectedPolygon(this);
+    }
+}
+
+void Polygon::detachFromLines()
+{
+    for (Line *line : m_lines) {
+        if (line)
+            line->removeConnectedPolygon(this);
     }
 }
 

@@ -26,10 +26,13 @@ public:
     void updateShape();
     bool involvesVertex(const Vertex *vertex) const;
     bool involvesLine(const Line *line) const;
+    void removeLine(Line *line);
 
 private:
     void attachToVertices();
     void detachFromVertices();
+    void attachToLines();
+    void detachFromLines();
     void initializeGraphicsItem();
 
     int m_id = -1;
