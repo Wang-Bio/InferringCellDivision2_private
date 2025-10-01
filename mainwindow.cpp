@@ -314,16 +314,26 @@ Line *MainWindow::createLineWithId(int id, Vertex *startVertex, Vertex *endVerte
 
 Polygon *MainWindow::createPolygon(const std::vector<Vertex *> &vertices, const std::vector<Line *> &lines)
 {
+    const int id = nextAvailablePolygonId();
+    return createPolygonWithId(id, vertices, lines);
+}
+
+Polygon *MainWindow::createPolygonWithId(int id,
+                                         const std::vector<Vertex *> &vertices,
+                                         const std::vector<Line *> &lines)
+{
     if (!m_scene || vertices.size() < 3 || lines.size() < 3)
         return nullptr;
 
     if (vertices.size() != lines.size())
         return nullptr;
 
+    if (findPolygonById(id))
+        return nullptr;
+
     auto vertexCopy = vertices;
     auto lineCopy = lines;
 
-    const int id = nextAvailablePolygonId();
     auto polygon = std::make_unique<Polygon>(id, std::move(vertexCopy), std::move(lineCopy), m_scene);
     Polygon *polygonPtr = polygon.get();
     m_polygons.push_back(std::move(polygon));
@@ -1212,6 +1222,32 @@ void MainWindow::on_actionDelete_All_Lines_triggered()
     resetSelectionLabels();
 }
 
+void MainWindow::on_actionDelete_All_Polygons_triggered()
+{
+    if (m_polygons.empty()) {
+        QMessageBox::information(this,
+                                 tr("Delete All Polygons"),
+                                 tr("There are no polygons to delete."));
+        return;
+    }
+
+    const auto reply = QMessageBox::question(this,
+                                             tr("Delete All Polygons"),
+                                             tr("Are you sure you want to delete all polygons?"),
+                                             QMessageBox::Yes | QMessageBox::No,
+                                             QMessageBox::No);
+
+    if (reply != QMessageBox::Yes)
+        return;
+
+    if (m_scene)
+        m_scene->clearSelection();
+
+    m_polygons.clear();
+    m_nextPolygonId = 0;
+    resetSelectionLabels();
+}
+
 void MainWindow::on_actionFind_Vertex_triggered()
 {
     if (m_vertices.empty()) {
@@ -1947,7 +1983,7 @@ void MainWindow::on_actionExport_Vertex_Line_triggered()
         return;
 
     const QString fileName = QFileDialog::getSaveFileName(this,
-                                                          tr("Export Vertices and Lines"),
+                                                          tr("Export Vertices, Lines, and Polygons"),
                                                           QString(),
                                                           tr("JSON Files (*.json);;All Files (*)"));
     if (fileName.isEmpty())
@@ -1983,14 +2019,44 @@ void MainWindow::on_actionExport_Vertex_Line_triggered()
         lineArray.append(lineObject);
     }
 
+    QJsonArray polygonArray;
+    for (const auto &polygon : m_polygons) {
+        if (!polygon)
+            continue;
+
+        QJsonObject polygonObject;
+        polygonObject.insert(QStringLiteral("id"), polygon->id());
+
+        QJsonArray polygonVertexIds;
+        for (const Vertex *vertex : polygon->vertices()) {
+            if (!vertex)
+                continue;
+
+            polygonVertexIds.append(vertex->id());
+        }
+        polygonObject.insert(QStringLiteral("vertexIds"), polygonVertexIds);
+
+        QJsonArray polygonLineIds;
+        for (const Line *line : polygon->lines()) {
+            if (!line)
+                continue;
+
+            polygonLineIds.append(line->id());
+        }
+        polygonObject.insert(QStringLiteral("lineIds"), polygonLineIds);
+
+        polygonArray.append(polygonObject);
+    }
+
     QJsonObject rootObject;
     rootObject.insert(QStringLiteral("vertices"), vertexArray);
     rootObject.insert(QStringLiteral("lines"), lineArray);
+    rootObject.insert(QStringLiteral("polygons"), polygonArray);
 
     QFile file(fileName);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         QMessageBox::warning(this,
-                              tr("Export Vertices and Lines"),
+                              tr("Export Vertices, Lines, and Polygons"),
                               tr("Failed to open %1 for writing.").arg(QDir::toNativeSeparators(fileName)));
         return;
     }
@@ -2066,7 +2132,7 @@ void MainWindow::on_actionSnapShot_View_triggered()
 void MainWindow::on_actionImport_Vertex_Line_triggered()
 {
     const QString fileName = QFileDialog::getOpenFileName(this,
-                                                          tr("Import Vertices and Lines"),
+                                                          tr("Import Vertices, Lines, and Polygons"),
                                                           QString(),
                                                           tr("JSON Files (*.json);;All Files (*)"));
     if (fileName.isEmpty())
@@ -2075,7 +2141,7 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly)) {
         QMessageBox::warning(this,
-                              tr("Import Vertices and Lines"),
+                              tr("Import Vertices, Lines, and Polygons"),
                               tr("Failed to open %1 for reading.").arg(QDir::toNativeSeparators(fileName)));
         return;
     }
@@ -2090,7 +2156,7 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
                                          ? tr("The file does not contain a valid JSON object.")
                                          : parseError.errorString();
         QMessageBox::warning(this,
-                              tr("Import Vertices and Lines"),
+                              tr("Import Vertices, Lines, and Polygons"),
                               tr("Failed to parse %1: %2").arg(QDir::toNativeSeparators(fileName), errorMessage));
         return;
     }
@@ -2098,16 +2164,18 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
     const QJsonObject rootObject = document.object();
     const QJsonValue verticesValue = rootObject.value(QStringLiteral("vertices"));
     const QJsonValue linesValue = rootObject.value(QStringLiteral("lines"));
+    const QJsonValue polygonsValue = rootObject.value(QStringLiteral("polygons"));
 
-    if (!verticesValue.isArray() || !linesValue.isArray()) {
+    if (!verticesValue.isArray() || !linesValue.isArray() || !polygonsValue.isArray()) {
         QMessageBox::warning(this,
-                              tr("Import Vertices and Lines"),
-                              tr("The JSON file must contain 'vertices' and 'lines' arrays."));
+                              tr("Import Vertices, Lines, and Polygons"),
+                              tr("The JSON file must contain 'vertices', 'lines', and 'polygons' arrays."));
         return;
     }
 
     const QJsonArray verticesArray = verticesValue.toArray();
     const QJsonArray linesArray = linesValue.toArray();
+    const QJsonArray polygonsArray = polygonsValue.toArray();
 
     struct VertexImportData {
         int id;
@@ -2118,6 +2186,11 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
         int startId;
         int endId;
     };
+    struct PolygonImportData {
+        int id;
+        std::vector<int> vertexIds;
+        std::vector<int> lineIds;
+    };
 
     std::vector<VertexImportData> importedVertices;
     importedVertices.reserve(verticesArray.size());
@@ -2126,7 +2199,7 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
     for (const QJsonValue &value : verticesArray) {
         if (!value.isObject()) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Each vertex entry must be a JSON object."));
             return;
         }
@@ -2138,7 +2211,7 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
 
         if (!idValue.isDouble() || !xValue.isDouble() || !yValue.isDouble()) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Vertex entries must contain numeric 'id', 'x', and 'y' fields."));
             return;
         }
@@ -2146,7 +2219,7 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
         const int id = idValue.toInt();
         if (!vertexIds.insert(id).second) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Duplicate vertex id %1 detected.").arg(id));
             return;
         }
@@ -2164,7 +2237,7 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
     for (const QJsonValue &value : linesArray) {
         if (!value.isObject()) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Each line entry must be a JSON object."));
             return;
         }
@@ -2176,7 +2249,7 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
 
         if (!idValue.isDouble() || !startValue.isDouble() || !endValue.isDouble()) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Line entries must contain numeric 'id', 'startVertexId', and 'endVertexId' fields."));
             return;
         }
@@ -2187,27 +2260,123 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
 
         if (!lineIds.insert(id).second) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Duplicate line id %1 detected.").arg(id));
             return;
         }
 
         if (startId == endId) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Line %1 references the same vertex for both ends.").arg(id));
             return;
         }
 
         if (!vertexIds.count(startId) || !vertexIds.count(endId)) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Line %1 references undefined vertices.").arg(id));
             return;
         }
 
         importedLines.push_back({id, startId, endId});
         maxLineId = std::max(maxLineId, id);
+    }
+
+    std::vector<PolygonImportData> importedPolygons;
+    importedPolygons.reserve(polygonsArray.size());
+    std::set<int> polygonIds;
+    int maxPolygonId = -1;
+
+    for (const QJsonValue &value : polygonsArray) {
+        if (!value.isObject()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices, Lines, and Polygons"),
+                                  tr("Each polygon entry must be a JSON object."));
+            return;
+        }
+
+        const QJsonObject polygonObject = value.toObject();
+        const QJsonValue idValue = polygonObject.value(QStringLiteral("id"));
+        const QJsonValue vertexIdsValue = polygonObject.value(QStringLiteral("vertexIds"));
+        const QJsonValue lineIdsValue = polygonObject.value(QStringLiteral("lineIds"));
+
+        if (!idValue.isDouble() || !vertexIdsValue.isArray() || !lineIdsValue.isArray()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices, Lines, and Polygons"),
+                                  tr("Polygon entries must contain numeric 'id' and arrays of 'vertexIds' and 'lineIds'."));
+            return;
+        }
+
+        const int id = idValue.toInt();
+        if (!polygonIds.insert(id).second) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices, Lines, and Polygons"),
+                                  tr("Duplicate polygon id %1 detected.").arg(id));
+            return;
+        }
+
+        const QJsonArray polygonVertexIdsArray = vertexIdsValue.toArray();
+        const QJsonArray polygonLineIdsArray = lineIdsValue.toArray();
+
+        if (polygonVertexIdsArray.size() < 3 || polygonLineIdsArray.size() < 3) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices, Lines, and Polygons"),
+                                  tr("Polygon %1 must reference at least three vertices and three lines.").arg(id));
+            return;
+        }
+
+        if (polygonVertexIdsArray.size() != polygonLineIdsArray.size()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices, Lines, and Polygons"),
+                                  tr("Polygon %1 must have matching counts of vertices and lines.").arg(id));
+            return;
+        }
+
+        std::vector<int> polygonVertexIds;
+        polygonVertexIds.reserve(polygonVertexIdsArray.size());
+        for (const QJsonValue &vertexIdValue : polygonVertexIdsArray) {
+            if (!vertexIdValue.isDouble()) {
+                QMessageBox::warning(this,
+                                      tr("Import Vertices, Lines, and Polygons"),
+                                      tr("Polygon %1 contains a non-numeric vertex id.").arg(id));
+                return;
+            }
+
+            const int vertexId = vertexIdValue.toInt();
+            if (!vertexIds.count(vertexId)) {
+                QMessageBox::warning(this,
+                                      tr("Import Vertices, Lines, and Polygons"),
+                                      tr("Polygon %1 references undefined vertex %2.").arg(id).arg(vertexId));
+                return;
+            }
+
+            polygonVertexIds.push_back(vertexId);
+        }
+
+        std::vector<int> polygonLineIds;
+        polygonLineIds.reserve(polygonLineIdsArray.size());
+        for (const QJsonValue &lineIdValue : polygonLineIdsArray) {
+            if (!lineIdValue.isDouble()) {
+                QMessageBox::warning(this,
+                                      tr("Import Vertices, Lines, and Polygons"),
+                                      tr("Polygon %1 contains a non-numeric line id.").arg(id));
+                return;
+            }
+
+            const int lineId = lineIdValue.toInt();
+            if (!lineIds.count(lineId)) {
+                QMessageBox::warning(this,
+                                      tr("Import Vertices, Lines, and Polygons"),
+                                      tr("Polygon %1 references undefined line %2.").arg(id).arg(lineId));
+                return;
+            }
+
+            polygonLineIds.push_back(lineId);
+        }
+
+        importedPolygons.push_back({id, std::move(polygonVertexIds), std::move(polygonLineIds)});
+        maxPolygonId = std::max(maxPolygonId, id);
     }
 
     m_scene->clearSelection();
@@ -2225,12 +2394,55 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
         Vertex *endVertex = findVertexById(lineData.endId);
         if (!createLineWithId(lineData.id, startVertex, endVertex)) {
             QMessageBox::warning(this,
-                                  tr("Import Vertices and Lines"),
+                                  tr("Import Vertices, Lines, and Polygons"),
                                   tr("Failed to create line %1.").arg(lineData.id));
             break;
         }
     }
 
+    for (const auto &polygonData : importedPolygons) {
+        std::vector<Vertex *> polygonVertices;
+        polygonVertices.reserve(polygonData.vertexIds.size());
+        for (int vertexId : polygonData.vertexIds) {
+            Vertex *vertex = findVertexById(vertexId);
+            if (!vertex) {
+                QMessageBox::warning(this,
+                                      tr("Import Vertices, Lines, and Polygons"),
+                                      tr("Failed to find vertex %1 for polygon %2.").arg(vertexId).arg(polygonData.id));
+                polygonVertices.clear();
+                break;
+            }
+            polygonVertices.push_back(vertex);
+        }
+
+        if (polygonVertices.size() != polygonData.vertexIds.size())
+            continue;
+
+        std::vector<Line *> polygonLines;
+        polygonLines.reserve(polygonData.lineIds.size());
+        for (int lineId : polygonData.lineIds) {
+            Line *line = findLineById(lineId);
+            if (!line) {
+                QMessageBox::warning(this,
+                                      tr("Import Vertices, Lines, and Polygons"),
+                                      tr("Failed to find line %1 for polygon %2.").arg(lineId).arg(polygonData.id));
+                polygonLines.clear();
+                break;
+            }
+            polygonLines.push_back(line);
+        }
+
+        if (polygonLines.size() != polygonData.lineIds.size())
+            continue;
+
+        if (!createPolygonWithId(polygonData.id, polygonVertices, polygonLines)) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices, Lines, and Polygons"),
+                                  tr("Failed to create polygon %1.").arg(polygonData.id));
+        }
+    }
+
     m_nextLineId = maxLineId >= 0 ? maxLineId + 1 : 0;
+    m_nextPolygonId = maxPolygonId >= 0 ? maxPolygonId + 1 : 0;
     resetSelectionLabels();
 }

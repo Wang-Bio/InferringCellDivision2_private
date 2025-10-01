@@ -43,6 +43,7 @@ private slots:
     void on_actionDelete_Line_triggered();
     void on_actionDelete_Polygon_triggered();
     void on_actionDelete_All_Lines_triggered();
+    void on_actionDelete_All_Polygons_triggered();
     void on_actionAdd_Polygon_triggered();
     void on_actionCell_Contour_Image_triggered();
     void on_actionCustom_Canvas_triggered();
@@ -78,6 +79,7 @@ private:
     Line *findLineById(int id) const;
     Line *findLineByVertices(Vertex *startVertex, Vertex *endVertex) const;
     Polygon *findPolygonById(int id) const;
+    Polygon *createPolygonWithId(int id, const std::vector<Vertex *> &vertices, const std::vector<Line *> &lines);
     void resetSelectionLabels();
     void updateSelectionLabels(Vertex *vertex);
     void updateSelectionLabels(Line *line);
