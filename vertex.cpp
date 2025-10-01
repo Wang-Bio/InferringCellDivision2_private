@@ -7,6 +7,7 @@
 #include <QRectF>
 #include <QGraphicsSceneMouseEvent>
 #include <QCursor>
+#include <QVariant>
 
 class VertexGraphicsItem : public QGraphicsEllipseItem
 {
@@ -28,8 +29,8 @@ public:
 protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override
     {
-        if (change == QGraphicsItem::ItemPositionHasChanged && m_vertex) {
-            m_vertex->updatePositionFromGraphicsItem(pos());
+        if (change == QGraphicsItem::ItemScenePositionHasChanged && m_vertex) {
+            m_vertex->updatePositionFromGraphicsItem(value.toPointF());
         }
         return QGraphicsEllipseItem::itemChange(change, value);
     }

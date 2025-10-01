@@ -51,6 +51,7 @@ MainWindow::MainWindow(QWidget *parent)
     resetSelectionLabels();
 
     connect(m_scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSceneSelectionChanged);
+    connect(m_scene, &QGraphicsScene::changed, this, &MainWindow::onSceneChanged);
 
     ui->graphicsView->setScene(m_scene);
     ui->graphicsView->setRenderHint(QPainter::Antialiasing);
@@ -220,6 +221,20 @@ void MainWindow::onSceneSelectionChanged()
     }
 }
 
+void MainWindow::onSceneChanged(const QList<QRectF> & /*region*/)
+{
+    if (!m_scene)
+        return;
+
+    const auto selectedItems = m_scene->selectedItems();
+    if (selectedItems.size() != 1)
+        return;
+
+    if (Vertex *vertex = findVertexByGraphicsItem(selectedItems.first())) {
+        updateSelectionLabels(vertex);
+    }
+}
+
 Vertex *MainWindow::findVertexByGraphicsItem(const QGraphicsItem *item) const
 {
     if (!item)
@@ -251,10 +266,12 @@ void MainWindow::updateSelectionLabels(Vertex *vertex)
     ui->label_selected_item->setText(tr("vertex"));
     ui->label_selected_item_id->setText(QString::number(vertex->id()));
 
-    const QPointF pos = vertex->position();
-    ui->label_selected_item_pos->setText(tr("(%1, %2)")
-                                             .arg(pos.x(), 0, 'f', 2)
-                                             .arg(pos.y(), 0, 'f', 2));
+    const QGraphicsItem *graphicsItem = vertex->graphicsItem();
+    const QPointF pos = graphicsItem ? graphicsItem->scenePos() : vertex->position();
+
+    const QString xText = QString::number(pos.x(), 'f', 2);
+    const QString yText = QString::number(pos.y(), 'f', 2);
+    ui->label_selected_item_pos->setText(tr("(%1, %2)").arg(xText, yText));
 }
 
 

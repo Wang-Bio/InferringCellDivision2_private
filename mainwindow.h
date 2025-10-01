@@ -1,8 +1,10 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <QList>
 #include <QMainWindow>
 #include <QPointF>
+#include <QRectF>
 #include <memory>
 #include <vector>
 
@@ -32,6 +34,7 @@ private slots:
     void on_actionDelete_All_Vertices_triggered();
     void on_actionCustom_Canvas_triggered();
     void onSceneSelectionChanged();
+    void onSceneChanged(const QList<QRectF> &region);
 
 private:
     Vertex *createVertex(const QPointF &position);
