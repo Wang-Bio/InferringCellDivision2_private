@@ -250,9 +250,21 @@ MainWindow::MainWindow(QWidget *parent)
                 this,
                 &MainWindow::handleDeleteVertexFromContextMenu);
         connect(zoomableView,
+                &ZoomableGraphicsView::deleteVerticesRequested,
+                this,
+                &MainWindow::handleDeleteSelectedVerticesFromContextMenu);
+        connect(zoomableView,
                 &ZoomableGraphicsView::deleteLineRequested,
                 this,
                 &MainWindow::handleDeleteLineFromContextMenu);
+        connect(zoomableView,
+                &ZoomableGraphicsView::deleteLinesRequested,
+                this,
+                &MainWindow::handleDeleteSelectedLinesFromContextMenu);
+        connect(zoomableView,
+                &ZoomableGraphicsView::createPolygonFromLinesRequested,
+                this,
+                &MainWindow::handleCreatePolygonFromLinesFromContextMenu);
         connect(zoomableView,
                 &ZoomableGraphicsView::createLineRequested,
                 this,
@@ -262,9 +274,17 @@ MainWindow::MainWindow(QWidget *parent)
                 this,
                 &MainWindow::handleDeletePolygonFromContextMenu);
         connect(zoomableView,
+                &ZoomableGraphicsView::deletePolygonsRequested,
+                this,
+                &MainWindow::handleDeleteSelectedPolygonsFromContextMenu);
+        connect(zoomableView,
                 &ZoomableGraphicsView::createPolygonRequested,
                 this,
                 &MainWindow::handleCreatePolygonFromContextMenu);
+        connect(zoomableView,
+                &ZoomableGraphicsView::deleteItemsRequested,
+                this,
+                &MainWindow::handleDeleteSelectedItemsFromContextMenu);
     }
 }
 
@@ -1871,6 +1891,35 @@ void MainWindow::handleDeleteVertexFromContextMenu(QGraphicsItem *vertexItem)
     }
 }
 
+void MainWindow::handleDeleteSelectedVerticesFromContextMenu(const QList<QGraphicsItem *> &vertexItems)
+{
+    if (!m_scene || vertexItems.isEmpty())
+        return;
+
+    std::vector<Vertex *> verticesToDelete;
+    verticesToDelete.reserve(vertexItems.size());
+
+    for (QGraphicsItem *item : vertexItems) {
+        if (!item)
+            continue;
+
+        if (Vertex *vertex = findVertexByGraphicsItem(item)) {
+            if (std::find(verticesToDelete.begin(), verticesToDelete.end(), vertex) == verticesToDelete.end())
+                verticesToDelete.push_back(vertex);
+        }
+    }
+
+    if (verticesToDelete.empty())
+        return;
+
+    m_scene->clearSelection();
+
+    for (Vertex *vertex : verticesToDelete)
+        deleteVertex(vertex);
+
+    resetSelectionLabels();
+}
+
 void MainWindow::handleDeleteLineFromContextMenu(QGraphicsItem *lineItem)
 {
     if (!m_scene || !lineItem)
@@ -1881,6 +1930,86 @@ void MainWindow::handleDeleteLineFromContextMenu(QGraphicsItem *lineItem)
         deleteLine(line);
         resetSelectionLabels();
     }
+}
+
+void MainWindow::handleDeleteSelectedLinesFromContextMenu(const QList<QGraphicsItem *> &lineItems)
+{
+    if (!m_scene || lineItems.isEmpty())
+        return;
+
+    std::vector<Line *> linesToDelete;
+    linesToDelete.reserve(lineItems.size());
+
+    for (QGraphicsItem *item : lineItems) {
+        if (!item)
+            continue;
+
+        if (Line *line = findLineByGraphicsItem(item)) {
+            if (std::find(linesToDelete.begin(), linesToDelete.end(), line) == linesToDelete.end())
+                linesToDelete.push_back(line);
+        }
+    }
+
+    if (linesToDelete.empty())
+        return;
+
+    m_scene->clearSelection();
+
+    for (Line *line : linesToDelete)
+        deleteLine(line);
+
+    resetSelectionLabels();
+}
+
+void MainWindow::handleCreatePolygonFromLinesFromContextMenu(const QList<QGraphicsItem *> &lineItems)
+{
+    if (!m_scene || lineItems.isEmpty())
+        return;
+
+    std::vector<Line *> inputLines;
+    inputLines.reserve(lineItems.size());
+
+    for (QGraphicsItem *item : lineItems) {
+        if (!item)
+            continue;
+
+        if (Line *line = findLineByGraphicsItem(item)) {
+            if (std::find(inputLines.begin(), inputLines.end(), line) == inputLines.end())
+                inputLines.push_back(line);
+        }
+    }
+
+    if (inputLines.size() < 3) {
+        QMessageBox::warning(this,
+                              tr("Create Polygon"),
+                              tr("At least three lines are required to create a polygon."));
+        return;
+    }
+
+    std::vector<Line *> orderedLines;
+    std::vector<Vertex *> orderedVertices;
+
+    if (!orderLinesIntoPolygon(inputLines, orderedLines, orderedVertices)) {
+        QMessageBox::warning(this,
+                              tr("Create Polygon"),
+                              tr("The selected lines must form a single closed polygon."));
+        return;
+    }
+
+    Polygon *polygon = createPolygon(orderedVertices, orderedLines);
+    if (!polygon) {
+        QMessageBox::warning(this,
+                              tr("Create Polygon"),
+                              tr("Failed to create the polygon from the selected lines."));
+        return;
+    }
+
+    if (QGraphicsItem *item = polygon->graphicsItem()) {
+        m_scene->clearSelection();
+        item->setSelected(true);
+    }
+
+    updateSelectionLabels(polygon);
 }
 
 void MainWindow::handleCreateLineFromContextMenu(QGraphicsItem *firstVertexItem, QGraphicsItem *secondVertexItem)
@@ -1926,6 +2055,35 @@ void MainWindow::handleDeletePolygonFromContextMenu(QGraphicsItem *polygonItem)
         deletePolygon(polygon);
         resetSelectionLabels();
     }
+}
+
+void MainWindow::handleDeleteSelectedPolygonsFromContextMenu(const QList<QGraphicsItem *> &polygonItems)
+{
+    if (!m_scene || polygonItems.isEmpty())
+        return;
+
+    std::vector<Polygon *> polygonsToDelete;
+    polygonsToDelete.reserve(polygonItems.size());
+
+    for (QGraphicsItem *item : polygonItems) {
+        if (!item)
+            continue;
+
+        if (Polygon *polygon = findPolygonByGraphicsItem(item)) {
+            if (std::find(polygonsToDelete.begin(), polygonsToDelete.end(), polygon) == polygonsToDelete.end())
+                polygonsToDelete.push_back(polygon);
+        }
+    }
+
+    if (polygonsToDelete.empty())
+        return;
+
+    m_scene->clearSelection();
+
+    for (Polygon *polygon : polygonsToDelete)
+        deletePolygon(polygon);
+
+    resetSelectionLabels();
 }
 
 void MainWindow::handleCreatePolygonFromContextMenu(const QList<QGraphicsItem *> &vertexItems)
@@ -2071,6 +2229,58 @@ void MainWindow::handleCreatePolygonFromContextMenu(const QList<QGraphicsItem *>
     }
 
     updateSelectionLabels(polygon);
+}
+
+void MainWindow::handleDeleteSelectedItemsFromContextMenu(const QList<QGraphicsItem *> &items)
+{
+    if (!m_scene || items.isEmpty())
+        return;
+
+    std::vector<Vertex *> verticesToDelete;
+    std::vector<Line *> linesToDelete;
+    std::vector<Polygon *> polygonsToDelete;
+
+    verticesToDelete.reserve(items.size());
+    linesToDelete.reserve(items.size());
+    polygonsToDelete.reserve(items.size());
+
+    for (QGraphicsItem *item : items) {
+        if (!item)
+            continue;
+
+        if (Vertex *vertex = findVertexByGraphicsItem(item)) {
+            if (std::find(verticesToDelete.begin(), verticesToDelete.end(), vertex) == verticesToDelete.end())
+                verticesToDelete.push_back(vertex);
+            continue;
+        }
+
+        if (Line *line = findLineByGraphicsItem(item)) {
+            if (std::find(linesToDelete.begin(), linesToDelete.end(), line) == linesToDelete.end())
+                linesToDelete.push_back(line);
+            continue;
+        }
+
+        if (Polygon *polygon = findPolygonByGraphicsItem(item)) {
+            if (std::find(polygonsToDelete.begin(), polygonsToDelete.end(), polygon) == polygonsToDelete.end())
+                polygonsToDelete.push_back(polygon);
+        }
+    }
+
+    if (verticesToDelete.empty() && linesToDelete.empty() && polygonsToDelete.empty())
+        return;
+
+    m_scene->clearSelection();
+
+    for (Polygon *polygon : polygonsToDelete)
+        deletePolygon(polygon);
+
+    for (Line *line : linesToDelete)
+        deleteLine(line);
+
+    for (Vertex *vertex : verticesToDelete)
+        deleteVertex(vertex);
+
+    resetSelectionLabels();
 }
 
 Vertex *MainWindow::findVertexByGraphicsItem(const QGraphicsItem *item) const

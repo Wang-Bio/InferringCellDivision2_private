@@ -58,10 +58,15 @@ private slots:
     void onSceneChanged(const QList<QRectF> &region);
     void handleAddVertexFromContextMenu(const QPointF &scenePosition);
     void handleDeleteVertexFromContextMenu(QGraphicsItem *vertexItem);
+    void handleDeleteSelectedVerticesFromContextMenu(const QList<QGraphicsItem *> &vertexItems);
     void handleDeleteLineFromContextMenu(QGraphicsItem *lineItem);
+    void handleDeleteSelectedLinesFromContextMenu(const QList<QGraphicsItem *> &lineItems);
+    void handleCreatePolygonFromLinesFromContextMenu(const QList<QGraphicsItem *> &lineItems);
     void handleCreateLineFromContextMenu(QGraphicsItem *firstVertexItem, QGraphicsItem *secondVertexItem);
     void handleDeletePolygonFromContextMenu(QGraphicsItem *polygonItem);
+    void handleDeleteSelectedPolygonsFromContextMenu(const QList<QGraphicsItem *> &polygonItems);
     void handleCreatePolygonFromContextMenu(const QList<QGraphicsItem *> &vertexItems);
+    void handleDeleteSelectedItemsFromContextMenu(const QList<QGraphicsItem *> &items);
 
 private:
     Vertex *createVertex(const QPointF &position);

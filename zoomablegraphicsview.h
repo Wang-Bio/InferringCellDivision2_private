@@ -18,9 +18,14 @@ signals:
     void addVertexRequested(const QPointF &scenePosition);
     void deleteVertexRequested(QGraphicsItem *vertexItem);
     void deleteLineRequested(QGraphicsItem *lineItem);
+    void deleteVerticesRequested(const QList<QGraphicsItem *> &vertexItems);
+    void deleteLinesRequested(const QList<QGraphicsItem *> &lineItems);
+    void deletePolygonsRequested(const QList<QGraphicsItem *> &polygonItems);
+    void deleteItemsRequested(const QList<QGraphicsItem *> &items);
     void createLineRequested(QGraphicsItem *firstVertexItem, QGraphicsItem *secondVertexItem);
     void deletePolygonRequested(QGraphicsItem *polygonItem);
     void createPolygonRequested(const QList<QGraphicsItem *> &vertexItems);
+    void createPolygonFromLinesRequested(const QList<QGraphicsItem *> &lineItems);
 
 protected:
     void wheelEvent(QWheelEvent *event) override;
