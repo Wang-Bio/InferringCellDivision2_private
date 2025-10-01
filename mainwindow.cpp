@@ -29,8 +29,16 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
+#include <QJsonValue>
 
 #include <algorithm>
+#include <set>
+#include <utility>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -99,6 +107,11 @@ MainWindow::~MainWindow()
 Vertex *MainWindow::createVertex(const QPointF &position)
 {
     const int id = nextAvailableId();
+    return createVertexWithId(id, position);
+}
+
+Vertex *MainWindow::createVertexWithId(int id, const QPointF &position)
+{
     auto vertex = std::make_unique<Vertex>(id, position, m_scene);
     Vertex *vertexPtr = vertex.get();
     m_vertices.push_back(std::move(vertex));
@@ -166,10 +179,18 @@ Vertex *MainWindow::findVertexById(int id) const
 
 Line *MainWindow::createLine(Vertex *startVertex, Vertex *endVertex)
 {
+    Line *line = createLineWithId(m_nextLineId, startVertex, endVertex);
+    if (line)
+        ++m_nextLineId;
+    return line;
+}
+
+Line *MainWindow::createLineWithId(int id, Vertex *startVertex, Vertex *endVertex)
+{
     if (!startVertex || !endVertex || startVertex == endVertex || !m_scene)
         return nullptr;
 
-    auto line = std::make_unique<Line>(m_nextLineId++, startVertex, endVertex, m_scene);
+    auto line = std::make_unique<Line>(id, startVertex, endVertex, m_scene);
     Line *linePtr = line.get();
     m_lines.push_back(std::move(line));
     return linePtr;
@@ -983,4 +1004,364 @@ void MainWindow::on_actionCustom_Canvas_triggered()
     }
 
     m_vertices.clear();
+}
+
+void MainWindow::on_actionExport_Vertex_Only_triggered()
+{
+    if (!m_scene)
+        return;
+
+    const QString fileName = QFileDialog::getSaveFileName(this,
+                                                          tr("Export Vertices"),
+                                                          QString(),
+                                                          tr("JSON Files (*.json);;All Files (*)"));
+    if (fileName.isEmpty())
+        return;
+
+    QJsonArray vertexArray;
+    for (const auto &vertex : m_vertices) {
+        if (!vertex)
+            continue;
+
+        const QPointF position = vertex->position();
+        QJsonObject vertexObject;
+        vertexObject.insert(QStringLiteral("id"), vertex->id());
+        vertexObject.insert(QStringLiteral("x"), position.x());
+        vertexObject.insert(QStringLiteral("y"), position.y());
+        vertexArray.append(vertexObject);
+    }
+
+    QJsonObject rootObject;
+    rootObject.insert(QStringLiteral("vertices"), vertexArray);
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        QMessageBox::warning(this,
+                              tr("Export Vertices"),
+                              tr("Failed to open %1 for writing.").arg(QDir::toNativeSeparators(fileName)));
+        return;
+    }
+
+    const QJsonDocument document(rootObject);
+    file.write(document.toJson(QJsonDocument::Indented));
+    file.close();
+}
+
+void MainWindow::on_actionImport_Vertex_Only_triggered()
+{
+    const QString fileName = QFileDialog::getOpenFileName(this,
+                                                          tr("Import Vertices"),
+                                                          QString(),
+                                                          tr("JSON Files (*.json);;All Files (*)"));
+    if (fileName.isEmpty())
+        return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this,
+                              tr("Import Vertices"),
+                              tr("Failed to open %1 for reading.").arg(QDir::toNativeSeparators(fileName)));
+        return;
+    }
+
+    const QByteArray data = file.readAll();
+    file.close();
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(data, &parseError);
+    if (document.isNull() || !document.isObject()) {
+        const QString errorMessage = parseError.error == QJsonParseError::NoError
+                                         ? tr("The file does not contain a valid JSON object.")
+                                         : parseError.errorString();
+        QMessageBox::warning(this,
+                              tr("Import Vertices"),
+                              tr("Failed to parse %1: %2").arg(QDir::toNativeSeparators(fileName), errorMessage));
+        return;
+    }
+
+    const QJsonObject rootObject = document.object();
+    const QJsonValue verticesValue = rootObject.value(QStringLiteral("vertices"));
+    if (!verticesValue.isArray()) {
+        QMessageBox::warning(this,
+                              tr("Import Vertices"),
+                              tr("The JSON file must contain an array named 'vertices'."));
+        return;
+    }
+
+    const QJsonArray verticesArray = verticesValue.toArray();
+    std::vector<std::pair<int, QPointF>> importedVertices;
+    importedVertices.reserve(verticesArray.size());
+    std::set<int> vertexIds;
+
+    for (const QJsonValue &value : verticesArray) {
+        if (!value.isObject()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices"),
+                                  tr("Each vertex entry must be a JSON object."));
+            return;
+        }
+
+        const QJsonObject vertexObject = value.toObject();
+        const QJsonValue idValue = vertexObject.value(QStringLiteral("id"));
+        const QJsonValue xValue = vertexObject.value(QStringLiteral("x"));
+        const QJsonValue yValue = vertexObject.value(QStringLiteral("y"));
+
+        if (!idValue.isDouble() || !xValue.isDouble() || !yValue.isDouble()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices"),
+                                  tr("Vertex entries must contain numeric 'id', 'x', and 'y' fields."));
+            return;
+        }
+
+        const int id = idValue.toInt();
+        if (!vertexIds.insert(id).second) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices"),
+                                  tr("Duplicate vertex id %1 detected.").arg(id));
+            return;
+        }
+
+        const qreal x = xValue.toDouble();
+        const qreal y = yValue.toDouble();
+        importedVertices.emplace_back(id, QPointF(x, y));
+    }
+
+    m_scene->clearSelection();
+    m_lines.clear();
+    m_vertices.clear();
+    m_nextLineId = 0;
+
+    for (const auto &vertexData : importedVertices)
+        createVertexWithId(vertexData.first, vertexData.second);
+
+    resetSelectionLabels();
+}
+
+void MainWindow::on_actionExport_Vertex_Line_triggered()
+{
+    if (!m_scene)
+        return;
+
+    const QString fileName = QFileDialog::getSaveFileName(this,
+                                                          tr("Export Vertices and Lines"),
+                                                          QString(),
+                                                          tr("JSON Files (*.json);;All Files (*)"));
+    if (fileName.isEmpty())
+        return;
+
+    QJsonArray vertexArray;
+    for (const auto &vertex : m_vertices) {
+        if (!vertex)
+            continue;
+
+        const QPointF position = vertex->position();
+        QJsonObject vertexObject;
+        vertexObject.insert(QStringLiteral("id"), vertex->id());
+        vertexObject.insert(QStringLiteral("x"), position.x());
+        vertexObject.insert(QStringLiteral("y"), position.y());
+        vertexArray.append(vertexObject);
+    }
+
+    QJsonArray lineArray;
+    for (const auto &line : m_lines) {
+        if (!line)
+            continue;
+
+        const Vertex *startVertex = line->startVertex();
+        const Vertex *endVertex = line->endVertex();
+        if (!startVertex || !endVertex)
+            continue;
+
+        QJsonObject lineObject;
+        lineObject.insert(QStringLiteral("id"), line->id());
+        lineObject.insert(QStringLiteral("startVertexId"), startVertex->id());
+        lineObject.insert(QStringLiteral("endVertexId"), endVertex->id());
+        lineArray.append(lineObject);
+    }
+
+    QJsonObject rootObject;
+    rootObject.insert(QStringLiteral("vertices"), vertexArray);
+    rootObject.insert(QStringLiteral("lines"), lineArray);
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        QMessageBox::warning(this,
+                              tr("Export Vertices and Lines"),
+                              tr("Failed to open %1 for writing.").arg(QDir::toNativeSeparators(fileName)));
+        return;
+    }
+
+    const QJsonDocument document(rootObject);
+    file.write(document.toJson(QJsonDocument::Indented));
+    file.close();
+}
+
+void MainWindow::on_actionImport_Vertex_Line_triggered()
+{
+    const QString fileName = QFileDialog::getOpenFileName(this,
+                                                          tr("Import Vertices and Lines"),
+                                                          QString(),
+                                                          tr("JSON Files (*.json);;All Files (*)"));
+    if (fileName.isEmpty())
+        return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this,
+                              tr("Import Vertices and Lines"),
+                              tr("Failed to open %1 for reading.").arg(QDir::toNativeSeparators(fileName)));
+        return;
+    }
+
+    const QByteArray data = file.readAll();
+    file.close();
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(data, &parseError);
+    if (document.isNull() || !document.isObject()) {
+        const QString errorMessage = parseError.error == QJsonParseError::NoError
+                                         ? tr("The file does not contain a valid JSON object.")
+                                         : parseError.errorString();
+        QMessageBox::warning(this,
+                              tr("Import Vertices and Lines"),
+                              tr("Failed to parse %1: %2").arg(QDir::toNativeSeparators(fileName), errorMessage));
+        return;
+    }
+
+    const QJsonObject rootObject = document.object();
+    const QJsonValue verticesValue = rootObject.value(QStringLiteral("vertices"));
+    const QJsonValue linesValue = rootObject.value(QStringLiteral("lines"));
+
+    if (!verticesValue.isArray() || !linesValue.isArray()) {
+        QMessageBox::warning(this,
+                              tr("Import Vertices and Lines"),
+                              tr("The JSON file must contain 'vertices' and 'lines' arrays."));
+        return;
+    }
+
+    const QJsonArray verticesArray = verticesValue.toArray();
+    const QJsonArray linesArray = linesValue.toArray();
+
+    struct VertexImportData {
+        int id;
+        QPointF position;
+    };
+    struct LineImportData {
+        int id;
+        int startId;
+        int endId;
+    };
+
+    std::vector<VertexImportData> importedVertices;
+    importedVertices.reserve(verticesArray.size());
+    std::set<int> vertexIds;
+
+    for (const QJsonValue &value : verticesArray) {
+        if (!value.isObject()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Each vertex entry must be a JSON object."));
+            return;
+        }
+
+        const QJsonObject vertexObject = value.toObject();
+        const QJsonValue idValue = vertexObject.value(QStringLiteral("id"));
+        const QJsonValue xValue = vertexObject.value(QStringLiteral("x"));
+        const QJsonValue yValue = vertexObject.value(QStringLiteral("y"));
+
+        if (!idValue.isDouble() || !xValue.isDouble() || !yValue.isDouble()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Vertex entries must contain numeric 'id', 'x', and 'y' fields."));
+            return;
+        }
+
+        const int id = idValue.toInt();
+        if (!vertexIds.insert(id).second) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Duplicate vertex id %1 detected.").arg(id));
+            return;
+        }
+
+        const qreal x = xValue.toDouble();
+        const qreal y = yValue.toDouble();
+        importedVertices.push_back({id, QPointF(x, y)});
+    }
+
+    std::vector<LineImportData> importedLines;
+    importedLines.reserve(linesArray.size());
+    std::set<int> lineIds;
+    int maxLineId = -1;
+
+    for (const QJsonValue &value : linesArray) {
+        if (!value.isObject()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Each line entry must be a JSON object."));
+            return;
+        }
+
+        const QJsonObject lineObject = value.toObject();
+        const QJsonValue idValue = lineObject.value(QStringLiteral("id"));
+        const QJsonValue startValue = lineObject.value(QStringLiteral("startVertexId"));
+        const QJsonValue endValue = lineObject.value(QStringLiteral("endVertexId"));
+
+        if (!idValue.isDouble() || !startValue.isDouble() || !endValue.isDouble()) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Line entries must contain numeric 'id', 'startVertexId', and 'endVertexId' fields."));
+            return;
+        }
+
+        const int id = idValue.toInt();
+        const int startId = startValue.toInt();
+        const int endId = endValue.toInt();
+
+        if (!lineIds.insert(id).second) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Duplicate line id %1 detected.").arg(id));
+            return;
+        }
+
+        if (startId == endId) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Line %1 references the same vertex for both ends.").arg(id));
+            return;
+        }
+
+        if (!vertexIds.count(startId) || !vertexIds.count(endId)) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Line %1 references undefined vertices.").arg(id));
+            return;
+        }
+
+        importedLines.push_back({id, startId, endId});
+        maxLineId = std::max(maxLineId, id);
+    }
+
+    m_scene->clearSelection();
+    m_lines.clear();
+    m_vertices.clear();
+    m_nextLineId = 0;
+
+    for (const auto &vertexData : importedVertices)
+        createVertexWithId(vertexData.id, vertexData.position);
+
+    for (const auto &lineData : importedLines) {
+        Vertex *startVertex = findVertexById(lineData.startId);
+        Vertex *endVertex = findVertexById(lineData.endId);
+        if (!createLineWithId(lineData.id, startVertex, endVertex)) {
+            QMessageBox::warning(this,
+                                  tr("Import Vertices and Lines"),
+                                  tr("Failed to create line %1.").arg(lineData.id));
+            break;
+        }
+    }
+
+    m_nextLineId = maxLineId >= 0 ? maxLineId + 1 : 0;
+    resetSelectionLabels();
 }

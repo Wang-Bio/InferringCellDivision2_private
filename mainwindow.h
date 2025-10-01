@@ -41,6 +41,10 @@ private slots:
     void on_actionDelete_All_Lines_triggered();
     void on_actionCell_Contour_Image_triggered();
     void on_actionCustom_Canvas_triggered();
+    void on_actionExport_Vertex_Only_triggered();
+    void on_actionImport_Vertex_Only_triggered();
+    void on_actionExport_Vertex_Line_triggered();
+    void on_actionImport_Vertex_Line_triggered();
     void onSceneSelectionChanged();
     void onSceneChanged(const QList<QRectF> &region);
     void handleAddVertexFromContextMenu(const QPointF &scenePosition);
@@ -49,12 +53,14 @@ private slots:
 
 private:
     Vertex *createVertex(const QPointF &position);
+    Vertex *createVertexWithId(int id, const QPointF &position);
     void deleteVertex(Vertex *vertex);
     int nextAvailableId() const;
     void sortVerticesById();
     Vertex *findVertexByGraphicsItem(const QGraphicsItem *item) const;
     Vertex *findVertexById(int id) const;
     Line *createLine(Vertex *startVertex, Vertex *endVertex);
+    Line *createLineWithId(int id, Vertex *startVertex, Vertex *endVertex);
     void deleteLine(Line *line);
     Line *findLineByGraphicsItem(const QGraphicsItem *item) const;
     Line *findLineById(int id) const;
