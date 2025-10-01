@@ -168,8 +168,8 @@
    </property>
     <addaction name="actionExport_Vertex_Only"/>
     <addaction name="actionExport_Vertex_Line"/>
-    <addaction name="actionScreen_Shot_all"/>
-    <addaction name="actionScreen_Shot_View"/>
+    <addaction name="actionSnapShot_All"/>
+    <addaction name="actionSnapShot_View"/>
    </widget>
    <widget class="QMenu" name="menuImport">
     <property name="title">
@@ -232,14 +232,14 @@
     <string>Find Vertex</string>
    </property>
   </action>
-  <action name="actionScreen_Shot_all">
+  <action name="actionSnapShot_All">
    <property name="text">
-    <string>Screen Shot (all)</string>
+    <string>Snapshot (All)</string>
    </property>
   </action>
-  <action name="actionScreen_Shot_View">
+  <action name="actionSnapShot_View">
    <property name="text">
-    <string>Screen Shot (View)</string>
+    <string>Snapshot (View)</string>
    </property>
   </action>
   <action name="actionExport_Vertex_Only">

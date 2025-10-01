@@ -45,6 +45,8 @@ private slots:
     void on_actionImport_Vertex_Only_triggered();
     void on_actionExport_Vertex_Line_triggered();
     void on_actionImport_Vertex_Line_triggered();
+    void on_actionSnapShot_All_triggered();
+    void on_actionSnapShot_View_triggered();
     void onSceneSelectionChanged();
     void onSceneChanged(const QList<QRectF> &region);
     void handleAddVertexFromContextMenu(const QPointF &scenePosition);

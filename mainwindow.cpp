@@ -30,6 +30,11 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
+#include <QGridLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLayout>
+#include <QWidget>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -39,6 +44,65 @@
 #include <algorithm>
 #include <set>
 #include <utility>
+#include <optional>
+
+namespace {
+struct SnapshotOptions
+{
+    QString filePath;
+    int quality = 90;
+};
+
+std::optional<SnapshotOptions> requestSnapshotOptions(QWidget *parent,
+                                                     const QString &title,
+                                                     const QString &defaultFileName)
+{
+    QFileDialog dialog(parent, title);
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+    dialog.setDefaultSuffix(QStringLiteral("png"));
+    dialog.selectFile(defaultFileName);
+    dialog.setNameFilters({QObject::tr("PNG Image (*.png)"),
+                          QObject::tr("JPEG Image (*.jpg *.jpeg)"),
+                          QObject::tr("Bitmap Image (*.bmp)"),
+                          QObject::tr("TIFF Image (*.tif *.tiff)")});
+
+    auto *qualityLabel = new QLabel(QObject::tr("Quality (0-100):"), &dialog);
+    auto *qualitySpinBox = new QSpinBox(&dialog);
+    qualitySpinBox->setRange(0, 100);
+    qualitySpinBox->setValue(90);
+
+    auto *qualityLayout = new QHBoxLayout;
+    qualityLayout->setContentsMargins(0, 0, 0, 0);
+    qualityLayout->addWidget(qualityLabel);
+    qualityLayout->addWidget(qualitySpinBox);
+
+    auto *qualityContainer = new QWidget(&dialog);
+    qualityContainer->setLayout(qualityLayout);
+
+    if (QLayout *layout = dialog.layout()) {
+        if (auto *gridLayout = qobject_cast<QGridLayout *>(layout)) {
+            const int row = gridLayout->rowCount();
+            gridLayout->addWidget(qualityContainer, row, 0, 1, gridLayout->columnCount());
+        } else {
+            layout->addWidget(qualityContainer);
+        }
+    }
+
+    if (dialog.exec() != QDialog::Accepted)
+        return std::nullopt;
+
+    const QStringList selectedFiles = dialog.selectedFiles();
+    if (selectedFiles.isEmpty())
+        return std::nullopt;
+
+    SnapshotOptions options;
+    options.filePath = selectedFiles.first();
+    options.quality = qualitySpinBox->value();
+    return options;
+}
+} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -1231,6 +1295,69 @@ void MainWindow::on_actionExport_Vertex_Line_triggered()
     const QJsonDocument document(rootObject);
     file.write(document.toJson(QJsonDocument::Indented));
     file.close();
+}
+
+void MainWindow::on_actionSnapShot_All_triggered()
+{
+    const auto options = requestSnapshotOptions(this,
+                                                tr("Save Snapshot (All)"),
+                                                tr("snapshot_all.png"));
+    if (!options)
+        return;
+
+    const QPixmap pixmap = grab();
+    if (pixmap.isNull()) {
+        QMessageBox::warning(this,
+                              tr("Save Snapshot"),
+                              tr("Failed to capture the snapshot."));
+        return;
+    }
+
+    if (!pixmap.save(options->filePath, nullptr, options->quality)) {
+        QMessageBox::warning(this,
+                              tr("Save Snapshot"),
+                              tr("Failed to save %1.").arg(QDir::toNativeSeparators(options->filePath)));
+        return;
+    }
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Snapshot saved to %1").arg(QDir::toNativeSeparators(options->filePath)),
+                                 5000);
+}
+
+void MainWindow::on_actionSnapShot_View_triggered()
+{
+    if (!ui || !ui->graphicsView) {
+        QMessageBox::warning(this,
+                              tr("Save Snapshot"),
+                              tr("Graphics view is not available."));
+        return;
+    }
+
+    const auto options = requestSnapshotOptions(this,
+                                                tr("Save Snapshot (View)"),
+                                                tr("snapshot_view.png"));
+    if (!options)
+        return;
+
+    const QPixmap pixmap = ui->graphicsView->grab();
+    if (pixmap.isNull()) {
+        QMessageBox::warning(this,
+                              tr("Save Snapshot"),
+                              tr("Failed to capture the graphics view."));
+        return;
+    }
+
+    if (!pixmap.save(options->filePath, nullptr, options->quality)) {
+        QMessageBox::warning(this,
+                              tr("Save Snapshot"),
+                              tr("Failed to save %1.").arg(QDir::toNativeSeparators(options->filePath)));
+        return;
+    }
+
+    if (statusBar())
+        statusBar()->showMessage(tr("Snapshot saved to %1").arg(QDir::toNativeSeparators(options->filePath)),
+                                 5000);
 }
 
 void MainWindow::on_actionImport_Vertex_Line_triggered()
