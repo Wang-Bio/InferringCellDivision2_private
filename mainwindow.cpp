@@ -241,6 +241,30 @@ int MainWindow::nextAvailableId() const
     return id;
 }
 
+int MainWindow::nextAvailableLineId() const
+{
+    int id = 0;
+    while (std::find_if(m_lines.begin(), m_lines.end(),
+                        [id](const std::unique_ptr<Line> &candidate) {
+                            return candidate && candidate->id() == id;
+                        }) != m_lines.end()) {
+        ++id;
+    }
+    return id;
+}
+
+int MainWindow::nextAvailablePolygonId() const
+{
+    int id = 0;
+    while (std::find_if(m_polygons.begin(), m_polygons.end(),
+                        [id](const std::unique_ptr<Polygon> &candidate) {
+                            return candidate && candidate->id() == id;
+                        }) != m_polygons.end()) {
+        ++id;
+    }
+    return id;
+}
+
 void MainWindow::sortVerticesById()
 {
     std::sort(m_vertices.begin(), m_vertices.end(),
@@ -264,9 +288,8 @@ Vertex *MainWindow::findVertexById(int id) const
 
 Line *MainWindow::createLine(Vertex *startVertex, Vertex *endVertex)
 {
-    Line *line = createLineWithId(m_nextLineId, startVertex, endVertex);
-    if (line)
-        ++m_nextLineId;
+    const int id = nextAvailableLineId();
+    Line *line = createLineWithId(id, startVertex, endVertex);
     return line;
 }
 
@@ -292,11 +315,10 @@ Polygon *MainWindow::createPolygon(const std::vector<Vertex *> &vertices, const 
     auto vertexCopy = vertices;
     auto lineCopy = lines;
 
-    const int id = m_nextPolygonId;
+    const int id = nextAvailablePolygonId();
     auto polygon = std::make_unique<Polygon>(id, std::move(vertexCopy), std::move(lineCopy), m_scene);
     Polygon *polygonPtr = polygon.get();
     m_polygons.push_back(std::move(polygon));
-    ++m_nextPolygonId;
     return polygonPtr;
 }
 

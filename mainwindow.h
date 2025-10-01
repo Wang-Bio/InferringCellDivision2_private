@@ -66,6 +66,8 @@ private:
     void sortVerticesById();
     Vertex *findVertexByGraphicsItem(const QGraphicsItem *item) const;
     Vertex *findVertexById(int id) const;
+    int nextAvailableLineId() const;
+    int nextAvailablePolygonId() const;
     Line *createLine(Vertex *startVertex, Vertex *endVertex);
     Line *createLineWithId(int id, Vertex *startVertex, Vertex *endVertex);
     void deleteLine(Line *line);
