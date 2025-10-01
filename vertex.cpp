@@ -89,6 +89,11 @@ void Vertex::setPosition(const QPointF &position)
     updateGraphicsItem();
 }
 
+QGraphicsItem *Vertex::graphicsItem() const
+{
+    return m_item;
+}
+
 void Vertex::updateGraphicsItem()
 {
     if (!m_item)

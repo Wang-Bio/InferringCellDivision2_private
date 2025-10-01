@@ -10,6 +10,7 @@ class QGraphicsScene;
 class ZoomableGraphicsView;
 class Vertex;
 class QGraphicsPixmapItem;
+class QGraphicsItem;
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -30,12 +31,16 @@ private slots:
     void on_actionDelete_Vertex_triggered();
     void on_actionDelete_All_Vertices_triggered();
     void on_actionCustom_Canvas_triggered();
+    void onSceneSelectionChanged();
 
 private:
     Vertex *createVertex(const QPointF &position);
     void deleteVertex(Vertex *vertex);
     int nextAvailableId() const;
     void sortVerticesById();
+    Vertex *findVertexByGraphicsItem(const QGraphicsItem *item) const;
+    void resetSelectionLabels();
+    void updateSelectionLabels(Vertex *vertex);
 
     Ui::MainWindow *ui;
     QGraphicsScene *m_scene = nullptr;

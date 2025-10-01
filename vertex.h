@@ -3,6 +3,7 @@
 
 #include <QPointF>
 
+class QGraphicsItem;
 class QGraphicsScene;
 class VertexGraphicsItem;
 
@@ -15,6 +16,7 @@ public:
     int id() const;
     QPointF position() const;
     void setPosition(const QPointF &position);
+    QGraphicsItem *graphicsItem() const;
 
 private:
     void updateGraphicsItem();

@@ -8,6 +8,7 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGraphicsScene>
+#include <QGraphicsItem>
 #include <QGraphicsView>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -35,7 +36,7 @@ MainWindow::MainWindow(QWidget *parent)
         const int index = splitter->indexOf(ui->graphicsView);
         if (index >= 0) {
             auto *originalView = ui->graphicsView;
-            auto *zoomableView = new ZoomableGraphicsView(splitter);
+            auto *zoomableView = new ZoomableGraphicsView;
             zoomableView->setObjectName(originalView->objectName());
             zoomableView->setSizePolicy(originalView->sizePolicy());
             zoomableView->setMinimumSize(originalView->minimumSize());
@@ -45,6 +46,11 @@ MainWindow::MainWindow(QWidget *parent)
             ui->graphicsView = zoomableView;
         }
     }
+
+
+    resetSelectionLabels();
+
+    connect(m_scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSceneSelectionChanged);
 
     ui->graphicsView->setScene(m_scene);
     ui->graphicsView->setRenderHint(QPainter::Antialiasing);
@@ -191,8 +197,66 @@ void MainWindow::on_actionDelete_All_Vertices_triggered()
 
     if (reply == QMessageBox::Yes) {
         m_vertices.clear();
+        resetSelectionLabels();
     }
 }
+
+void MainWindow::onSceneSelectionChanged()
+{
+    if (!m_scene)
+        return;
+
+    const auto selectedItems = m_scene->selectedItems();
+    if (selectedItems.isEmpty()) {
+        resetSelectionLabels();
+        return;
+    }
+
+    Vertex *vertex = findVertexByGraphicsItem(selectedItems.first());
+    if (vertex) {
+        updateSelectionLabels(vertex);
+    } else {
+        resetSelectionLabels();
+    }
+}
+
+Vertex *MainWindow::findVertexByGraphicsItem(const QGraphicsItem *item) const
+{
+    if (!item)
+        return nullptr;
+
+    const auto it = std::find_if(m_vertices.begin(), m_vertices.end(),
+                                 [item](const std::unique_ptr<Vertex> &vertex) {
+                                     return vertex && vertex->graphicsItem() == item;
+                                 });
+
+    if (it != m_vertices.end())
+        return it->get();
+
+    return nullptr;
+}
+
+void MainWindow::resetSelectionLabels()
+{
+    ui->label_selected_item->setText(tr("-"));
+    ui->label_selected_item_id->setText(tr("-"));
+    ui->label_selected_item_pos->setText(tr("-"));
+}
+
+void MainWindow::updateSelectionLabels(Vertex *vertex)
+{
+    if (!vertex)
+        return;
+
+    ui->label_selected_item->setText(tr("vertex"));
+    ui->label_selected_item_id->setText(QString::number(vertex->id()));
+
+    const QPointF pos = vertex->position();
+    ui->label_selected_item_pos->setText(tr("(%1, %2)")
+                                             .arg(pos.x(), 0, 'f', 2)
+                                             .arg(pos.y(), 0, 'f', 2));
+}
+
 
 
 void MainWindow::on_actionCustom_Canvas_triggered()
