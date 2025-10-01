@@ -41,6 +41,8 @@ private slots:
     void onSceneSelectionChanged();
     void onSceneChanged(const QList<QRectF> &region);
     void handleAddVertexFromContextMenu(const QPointF &scenePosition);
+    void handleDeleteVertexFromContextMenu(QGraphicsItem *vertexItem);
+    void handleDeleteLineFromContextMenu(QGraphicsItem *lineItem);
 
 private:
     Vertex *createVertex(const QPointF &position);

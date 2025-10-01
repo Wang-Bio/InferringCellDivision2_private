@@ -70,6 +70,14 @@ MainWindow::MainWindow(QWidget *parent)
                 &ZoomableGraphicsView::addVertexRequested,
                 this,
                 &MainWindow::handleAddVertexFromContextMenu);
+        connect(zoomableView,
+                &ZoomableGraphicsView::deleteVertexRequested,
+                this,
+                &MainWindow::handleDeleteVertexFromContextMenu);
+        connect(zoomableView,
+                &ZoomableGraphicsView::deleteLineRequested,
+                this,
+                &MainWindow::handleDeleteLineFromContextMenu);
     }
 }
 
@@ -609,6 +617,30 @@ void MainWindow::handleAddVertexFromContextMenu(const QPointF &scenePosition)
     }
 
     updateSelectionLabels(vertex);
+}
+
+void MainWindow::handleDeleteVertexFromContextMenu(QGraphicsItem *vertexItem)
+{
+    if (!m_scene || !vertexItem)
+        return;
+
+    if (Vertex *vertex = findVertexByGraphicsItem(vertexItem)) {
+        m_scene->clearSelection();
+        deleteVertex(vertex);
+        resetSelectionLabels();
+    }
+}
+
+void MainWindow::handleDeleteLineFromContextMenu(QGraphicsItem *lineItem)
+{
+    if (!m_scene || !lineItem)
+        return;
+
+    if (Line *line = findLineByGraphicsItem(lineItem)) {
+        m_scene->clearSelection();
+        deleteLine(line);
+        resetSelectionLabels();
+    }
 }
 
 Vertex *MainWindow::findVertexByGraphicsItem(const QGraphicsItem *item) const

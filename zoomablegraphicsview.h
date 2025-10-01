@@ -5,6 +5,7 @@
 #include <QPointF>
 
 class QContextMenuEvent;
+class QGraphicsItem;
 
 class ZoomableGraphicsView : public QGraphicsView
 {
@@ -15,6 +16,8 @@ public:
 
 signals:
     void addVertexRequested(const QPointF &scenePosition);
+    void deleteVertexRequested(QGraphicsItem *vertexItem);
+    void deleteLineRequested(QGraphicsItem *lineItem);
 
 protected:
     void wheelEvent(QWheelEvent *event) override;

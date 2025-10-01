@@ -3,6 +3,7 @@
 #include <QContextMenuEvent>
 #include <QGraphicsEllipseItem>
 #include <QGraphicsItem>
+#include <QGraphicsLineItem>
 #include <QGraphicsPixmapItem>
 #include <QMenu>
 #include <QWheelEvent>
@@ -67,10 +68,30 @@ void ZoomableGraphicsView::contextMenuEvent(QContextMenuEvent *event)
 
     if (QGraphicsItem *itemUnderCursor = itemAt(event->pos())) {
         const int itemType = itemUnderCursor->type();
-        const bool isVertexItem = itemType == QGraphicsEllipseItem::Type
-                                  && itemUnderCursor->flags().testFlag(QGraphicsItem::ItemIsSelectable);
+        const bool isSelectableVertex = itemType == QGraphicsEllipseItem::Type
+                                        && itemUnderCursor->flags().testFlag(QGraphicsItem::ItemIsSelectable);
 
-        if (isVertexItem || itemType != QGraphicsPixmapItem::Type) {
+        if (itemType == QGraphicsLineItem::Type) {
+            QMenu menu(this);
+            QAction *deleteLineAction = menu.addAction(tr("Delete line"));
+            QAction *selectedAction = menu.exec(event->globalPos());
+
+            if (selectedAction == deleteLineAction)
+                emit deleteLineRequested(itemUnderCursor);
+            return;
+        }
+
+        if (isSelectableVertex) {
+            QMenu menu(this);
+            QAction *deleteVertexAction = menu.addAction(tr("Delete vertex"));
+            QAction *selectedAction = menu.exec(event->globalPos());
+
+            if (selectedAction == deleteVertexAction)
+                emit deleteVertexRequested(itemUnderCursor);
+            return;
+        }
+
+        if (itemType != QGraphicsPixmapItem::Type) {
             QGraphicsView::contextMenuEvent(event);
             return;
         }
