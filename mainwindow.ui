@@ -160,6 +160,7 @@
      <string>Find</string>
     </property>
     <addaction name="actionFind_Vertex"/>
+    <addaction name="actionFind_Line"/>
    </widget>
    <widget class="QMenu" name="menuExport">
     <property name="title">
@@ -254,6 +255,11 @@
   <action name="actionDelete_All_Lines">
    <property name="text">
     <string>Delete All Lines</string>
+   </property>
+  </action>
+  <action name="actionFind_Line">
+   <property name="text">
+    <string>Find Line</string>
    </property>
   </action>
  </widget>

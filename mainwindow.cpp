@@ -205,6 +205,19 @@ Line *MainWindow::findLineByGraphicsItem(const QGraphicsItem *item) const
     return nullptr;
 }
 
+Line *MainWindow::findLineById(int id) const
+{
+    const auto it = std::find_if(m_lines.begin(), m_lines.end(),
+                                 [id](const std::unique_ptr<Line> &line) {
+                                     return line && line->id() == id;
+                                 });
+
+    if (it != m_lines.end())
+        return it->get();
+
+    return nullptr;
+}
+
 Line *MainWindow::findLineByVertices(Vertex *startVertex, Vertex *endVertex) const
 {
     if (!startVertex || !endVertex)
@@ -372,6 +385,64 @@ void MainWindow::on_actionAdd_Line_triggered()
     updateSelectionLabels(line);
 }
 
+void MainWindow::on_actionFind_Line_triggered()
+{
+    if (m_lines.empty()) {
+        QMessageBox::information(this,
+                                 tr("Find Line"),
+                                 tr("There are no lines to select."));
+        return;
+    }
+
+    int maxId = 0;
+    bool hasLine = false;
+    for (const auto &line : m_lines) {
+        if (line) {
+            maxId = std::max(maxId, line->id());
+            hasLine = true;
+        }
+    }
+
+    if (!hasLine) {
+        QMessageBox::information(this,
+                                 tr("Find Line"),
+                                 tr("There are no lines to select."));
+        return;
+    }
+
+    bool ok = false;
+    const int idToFind = QInputDialog::getInt(this,
+                                              tr("Find Line"),
+                                              tr("Enter the line ID:"),
+                                              0,
+                                              0,
+                                              std::max(0, maxId),
+                                              1,
+                                              &ok);
+
+    if (!ok)
+        return;
+
+    Line *line = findLineById(idToFind);
+    if (!line) {
+        QMessageBox::warning(this,
+                              tr("Find Line"),
+                              tr("No line with ID %1 was found.").arg(idToFind));
+        return;
+    }
+
+    if (m_scene)
+        m_scene->clearSelection();
+
+    if (QGraphicsItem *item = line->graphicsItem()) {
+        item->setSelected(true);
+        if (ui->graphicsView)
+            ui->graphicsView->centerOn(item);
+    }
+
+    updateSelectionLabels(line);
+}
+
 void MainWindow::on_actionDelete_Vertex_triggered()
 {
     if (m_vertices.empty()) {
@@ -424,6 +495,85 @@ void MainWindow::on_actionDelete_All_Vertices_triggered()
         m_nextLineId = 0;
         resetSelectionLabels();
     }
+}
+
+void MainWindow::on_actionDelete_Line_triggered()
+{
+    if (m_lines.empty()) {
+        QMessageBox::information(this,
+                                 tr("Delete Line"),
+                                 tr("There are no lines to delete."));
+        return;
+    }
+
+    int maxId = 0;
+    bool hasLine = false;
+    for (const auto &line : m_lines) {
+        if (line) {
+            maxId = std::max(maxId, line->id());
+            hasLine = true;
+        }
+    }
+
+    if (!hasLine) {
+        QMessageBox::information(this,
+                                 tr("Delete Line"),
+                                 tr("There are no lines to delete."));
+        return;
+    }
+
+    bool ok = false;
+    const int idToDelete = QInputDialog::getInt(this,
+                                                tr("Delete Line"),
+                                                tr("Enter the line ID:"),
+                                                0,
+                                                0,
+                                                std::max(0, maxId),
+                                                1,
+                                                &ok);
+
+    if (!ok)
+        return;
+
+    Line *line = findLineById(idToDelete);
+    if (!line) {
+        QMessageBox::warning(this,
+                              tr("Delete Line"),
+                              tr("No line with ID %1 was found.").arg(idToDelete));
+        return;
+    }
+
+    if (m_scene)
+        m_scene->clearSelection();
+
+    deleteLine(line);
+    resetSelectionLabels();
+}
+
+void MainWindow::on_actionDelete_All_Lines_triggered()
+{
+    if (m_lines.empty()) {
+        QMessageBox::information(this,
+                                 tr("Delete All Lines"),
+                                 tr("There are no lines to delete."));
+        return;
+    }
+
+    const auto reply = QMessageBox::question(this,
+                                             tr("Delete All Lines"),
+                                             tr("Are you sure you want to delete all lines?"),
+                                             QMessageBox::Yes | QMessageBox::No,
+                                             QMessageBox::No);
+
+    if (reply != QMessageBox::Yes)
+        return;
+
+    if (m_scene)
+        m_scene->clearSelection();
+
+    m_lines.clear();
+    m_nextLineId = 0;
+    resetSelectionLabels();
 }
 
 void MainWindow::on_actionFind_Vertex_triggered()
