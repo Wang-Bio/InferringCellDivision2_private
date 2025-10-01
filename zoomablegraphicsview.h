@@ -1,12 +1,12 @@
 #ifndef ZOOMABLEGRAPHICSVIEW_H
 #define ZOOMABLEGRAPHICSVIEW_H
 
+#include <QGraphicsItem>
 #include <QGraphicsView>
+#include <QList>
 #include <QPointF>
 
 class QContextMenuEvent;
-class QGraphicsItem;
-
 class ZoomableGraphicsView : public QGraphicsView
 {
     Q_OBJECT
@@ -19,6 +19,8 @@ signals:
     void deleteVertexRequested(QGraphicsItem *vertexItem);
     void deleteLineRequested(QGraphicsItem *lineItem);
     void createLineRequested(QGraphicsItem *firstVertexItem, QGraphicsItem *secondVertexItem);
+    void deletePolygonRequested(QGraphicsItem *polygonItem);
+    void createPolygonRequested(const QList<QGraphicsItem *> &vertexItems);
 
 protected:
     void wheelEvent(QWheelEvent *event) override;

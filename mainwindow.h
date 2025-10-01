@@ -1,6 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <QGraphicsItem>
 #include <QList>
 #include <QMainWindow>
 #include <QPointF>
@@ -57,6 +58,8 @@ private slots:
     void handleDeleteVertexFromContextMenu(QGraphicsItem *vertexItem);
     void handleDeleteLineFromContextMenu(QGraphicsItem *lineItem);
     void handleCreateLineFromContextMenu(QGraphicsItem *firstVertexItem, QGraphicsItem *secondVertexItem);
+    void handleDeletePolygonFromContextMenu(QGraphicsItem *polygonItem);
+    void handleCreatePolygonFromContextMenu(const QList<QGraphicsItem *> &vertexItems);
 
 private:
     Vertex *createVertex(const QPointF &position);

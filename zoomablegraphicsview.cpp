@@ -5,6 +5,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsLineItem>
 #include <QGraphicsPixmapItem>
+#include <QGraphicsPolygonItem>
 #include <QList>
 #include <QMenu>
 #include <QWheelEvent>
@@ -82,9 +83,20 @@ void ZoomableGraphicsView::contextMenuEvent(QContextMenuEvent *event)
             return;
         }
 
+        if (itemType == QGraphicsPolygonItem::Type) {
+            QMenu menu(this);
+            QAction *deletePolygonAction = menu.addAction(tr("Delete polygon"));
+            QAction *selectedAction = menu.exec(event->globalPos());
+
+            if (selectedAction == deletePolygonAction)
+                emit deletePolygonRequested(itemUnderCursor);
+            return;
+        }
+
         if (isSelectableVertex) {
             QMenu menu(this);
             QAction *createLineAction = nullptr;
+            QAction *createPolygonAction = nullptr;
             QList<QGraphicsItem *> selectedVertices;
 
             if (scene()) {
@@ -102,6 +114,9 @@ void ZoomableGraphicsView::contextMenuEvent(QContextMenuEvent *event)
 
                 if (selectedVertices.size() == 2 && selectedVertices.contains(itemUnderCursor))
                     createLineAction = menu.addAction(tr("Create line between vertices"));
+
+                if (selectedVertices.size() >= 3 && selectedVertices.contains(itemUnderCursor))
+                    createPolygonAction = menu.addAction(tr("Create polygon from vertices"));
             }
 
             QAction *deleteVertexAction = menu.addAction(tr("Delete vertex"));
@@ -111,6 +126,8 @@ void ZoomableGraphicsView::contextMenuEvent(QContextMenuEvent *event)
                 emit deleteVertexRequested(itemUnderCursor);
             } else if (selectedAction == createLineAction && selectedVertices.size() == 2) {
                 emit createLineRequested(selectedVertices.at(0), selectedVertices.at(1));
+            } else if (selectedAction == createPolygonAction && selectedVertices.size() >= 3) {
+                emit createPolygonRequested(selectedVertices);
             }
             return;
         }

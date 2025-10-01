@@ -159,6 +159,14 @@ MainWindow::MainWindow(QWidget *parent)
                 &ZoomableGraphicsView::createLineRequested,
                 this,
                 &MainWindow::handleCreateLineFromContextMenu);
+        connect(zoomableView,
+                &ZoomableGraphicsView::deletePolygonRequested,
+                this,
+                &MainWindow::handleDeletePolygonFromContextMenu);
+        connect(zoomableView,
+                &ZoomableGraphicsView::createPolygonRequested,
+                this,
+                &MainWindow::handleCreatePolygonFromContextMenu);
     }
 }
 
@@ -1456,6 +1464,125 @@ void MainWindow::handleCreateLineFromContextMenu(QGraphicsItem *firstVertexItem,
     }
 
     updateSelectionLabels(line);
+}
+
+void MainWindow::handleDeletePolygonFromContextMenu(QGraphicsItem *polygonItem)
+{
+    if (!m_scene || !polygonItem)
+        return;
+
+    if (Polygon *polygon = findPolygonByGraphicsItem(polygonItem)) {
+        m_scene->clearSelection();
+        deletePolygon(polygon);
+        resetSelectionLabels();
+    }
+}
+
+void MainWindow::handleCreatePolygonFromContextMenu(const QList<QGraphicsItem *> &vertexItems)
+{
+    if (!m_scene || vertexItems.size() < 3)
+        return;
+
+    std::vector<Vertex *> selectedVertices;
+    selectedVertices.reserve(vertexItems.size());
+
+    std::unordered_set<Vertex *> uniqueVertices;
+    uniqueVertices.reserve(static_cast<std::size_t>(vertexItems.size()));
+
+    for (QGraphicsItem *item : vertexItems) {
+        if (!item)
+            continue;
+
+        Vertex *vertex = findVertexByGraphicsItem(item);
+        if (!vertex)
+            continue;
+
+        if (uniqueVertices.insert(vertex).second)
+            selectedVertices.push_back(vertex);
+    }
+
+    if (selectedVertices.size() < 3) {
+        QMessageBox::warning(this,
+                              tr("Create Polygon"),
+                              tr("Select at least three unique vertices connected by lines."));
+        return;
+    }
+
+    std::unordered_set<Vertex *> vertexSet;
+    vertexSet.reserve(selectedVertices.size());
+    for (Vertex *vertex : selectedVertices)
+        vertexSet.insert(vertex);
+
+    std::vector<Line *> candidateLines;
+    candidateLines.reserve(selectedVertices.size());
+
+    for (const auto &line : m_lines) {
+        if (!line)
+            continue;
+
+        Vertex *start = line->startVertex();
+        Vertex *end = line->endVertex();
+        if (vertexSet.count(start) && vertexSet.count(end))
+            candidateLines.push_back(line.get());
+    }
+
+    if (candidateLines.size() != selectedVertices.size()) {
+        QMessageBox::warning(this,
+                              tr("Create Polygon"),
+                              tr("The selected vertices must be connected by exactly one closed polygon."));
+        return;
+    }
+
+    std::unordered_map<Vertex *, int> degreeCount;
+    degreeCount.reserve(selectedVertices.size());
+    for (Line *line : candidateLines) {
+        if (!line)
+            continue;
+
+        degreeCount[line->startVertex()]++;
+        degreeCount[line->endVertex()]++;
+    }
+
+    for (Vertex *vertex : selectedVertices) {
+        if (degreeCount[vertex] != 2) {
+            QMessageBox::warning(this,
+                                  tr("Create Polygon"),
+                                  tr("Each selected vertex must connect to exactly two selected lines."));
+            return;
+        }
+    }
+
+    std::vector<Line *> orderedLines;
+    std::vector<Vertex *> orderedVertices;
+
+    if (!orderLinesIntoPolygon(candidateLines, orderedLines, orderedVertices)) {
+        QMessageBox::warning(this,
+                              tr("Create Polygon"),
+                              tr("Failed to order the selected vertices into a polygon."));
+        return;
+    }
+
+    if (orderedLines.size() < 3 || orderedVertices.size() != orderedLines.size()) {
+        QMessageBox::warning(this,
+                              tr("Create Polygon"),
+                              tr("Failed to create a polygon from the selected vertices."));
+        return;
+    }
+
+    Polygon *polygon = createPolygon(orderedVertices, orderedLines);
+    if (!polygon) {
+        QMessageBox::warning(this,
+                              tr("Create Polygon"),
+                              tr("Failed to create the polygon."));
+        return;
+    }
+
+    if (QGraphicsItem *item = polygon->graphicsItem()) {
+        m_scene->clearSelection();
+        item->setSelected(true);
+    }
+
+    updateSelectionLabels(polygon);
 }
 
 Vertex *MainWindow::findVertexByGraphicsItem(const QGraphicsItem *item) const
