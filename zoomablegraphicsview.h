@@ -4,9 +4,11 @@
 #include <QGraphicsItem>
 #include <QGraphicsView>
 #include <QList>
+#include <QPoint>
 #include <QPointF>
 
 class QContextMenuEvent;
+class QMouseEvent;
 class ZoomableGraphicsView : public QGraphicsView
 {
     Q_OBJECT
@@ -30,11 +32,16 @@ signals:
 protected:
     void wheelEvent(QWheelEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
     void applyZoomFactor(double factor);
     double m_minimumScale = 0.1;
     double m_maximumScale = 10.0;
+    bool m_isPanning = false;
+    QPoint m_lastMousePosition;
 };
 
 #endif // ZOOMABLEGRAPHICSVIEW_H

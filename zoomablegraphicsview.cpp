@@ -8,6 +8,8 @@
 #include <QGraphicsPolygonItem>
 #include <QList>
 #include <QMenu>
+#include <QMouseEvent>
+#include <QScrollBar>
 #include <QWheelEvent>
 #include <QtGlobal>
 
@@ -239,4 +241,61 @@ void ZoomableGraphicsView::contextMenuEvent(QContextMenuEvent *event)
 
     if (selectedAction == addVertexAction)
         emit addVertexRequested(scenePosition);
+}
+
+void ZoomableGraphicsView::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && scene() && scene()->selectedItems().isEmpty()) {
+        QGraphicsItem *itemUnderCursor = itemAt(event->pos());
+        const bool isBackgroundItem = !itemUnderCursor
+                                      || (itemUnderCursor->type() == QGraphicsPixmapItem::Type
+                                          && !itemUnderCursor->flags().testFlag(QGraphicsItem::ItemIsSelectable));
+
+        if (isBackgroundItem) {
+            m_isPanning = true;
+            m_lastMousePosition = event->pos();
+            viewport()->setCursor(Qt::ClosedHandCursor);
+            event->accept();
+            return;
+        }
+    }
+
+    QGraphicsView::mousePressEvent(event);
+}
+
+void ZoomableGraphicsView::mouseMoveEvent(QMouseEvent *event)
+{
+    if (m_isPanning) {
+        if (!(event->buttons() & Qt::LeftButton)) {
+            m_isPanning = false;
+            viewport()->unsetCursor();
+            QGraphicsView::mouseMoveEvent(event);
+            return;
+        }
+
+        const QPoint delta = event->pos() - m_lastMousePosition;
+        m_lastMousePosition = event->pos();
+
+        if (QScrollBar *horizontalBar = horizontalScrollBar())
+            horizontalBar->setValue(horizontalBar->value() - delta.x());
+        if (QScrollBar *verticalBar = verticalScrollBar())
+            verticalBar->setValue(verticalBar->value() - delta.y());
+
+        event->accept();
+        return;
+    }
+
+    QGraphicsView::mouseMoveEvent(event);
+}
+
+void ZoomableGraphicsView::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && m_isPanning) {
+        m_isPanning = false;
+        viewport()->unsetCursor();
+        event->accept();
+        return;
+    }
+
+    QGraphicsView::mouseReleaseEvent(event);
 }
