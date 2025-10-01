@@ -3,6 +3,7 @@
 #include "vertex.h"
 #include "zoomablegraphicsview.h"
 #include "line.h"
+#include "polygon.h"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -40,11 +41,15 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QJsonValue>
+#include <QLineEdit>
+#include <QRegularExpression>
 
 #include <algorithm>
 #include <set>
 #include <utility>
 #include <optional>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace {
 struct SnapshotOptions
@@ -159,9 +164,11 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    m_polygons.clear();
     m_lines.clear();
     m_vertices.clear();
     m_nextLineId = 0;
+    m_nextPolygonId = 0;
 
     if (m_scene && m_backgroundItem) {
         m_scene->removeItem(m_backgroundItem);
@@ -191,6 +198,16 @@ void MainWindow::deleteVertex(Vertex *vertex)
 {
     if (!vertex)
         return;
+
+    std::vector<Polygon *> polygonsToDelete;
+    polygonsToDelete.reserve(m_polygons.size());
+    for (const auto &polygon : m_polygons) {
+        if (polygon && polygon->involvesVertex(vertex))
+            polygonsToDelete.push_back(polygon.get());
+    }
+
+    for (Polygon *polygon : polygonsToDelete)
+        deletePolygon(polygon);
 
     std::vector<Line *> linesToDelete;
     linesToDelete.reserve(m_lines.size());
@@ -264,10 +281,39 @@ Line *MainWindow::createLineWithId(int id, Vertex *startVertex, Vertex *endVerte
     return linePtr;
 }
 
+Polygon *MainWindow::createPolygon(const std::vector<Vertex *> &vertices, const std::vector<Line *> &lines)
+{
+    if (!m_scene || vertices.size() < 3 || lines.size() < 3)
+        return nullptr;
+
+    if (vertices.size() != lines.size())
+        return nullptr;
+
+    auto vertexCopy = vertices;
+    auto lineCopy = lines;
+
+    const int id = m_nextPolygonId;
+    auto polygon = std::make_unique<Polygon>(id, std::move(vertexCopy), std::move(lineCopy), m_scene);
+    Polygon *polygonPtr = polygon.get();
+    m_polygons.push_back(std::move(polygon));
+    ++m_nextPolygonId;
+    return polygonPtr;
+}
+
 void MainWindow::deleteLine(Line *line)
 {
     if (!line)
         return;
+
+    std::vector<Polygon *> polygonsToDelete;
+    polygonsToDelete.reserve(m_polygons.size());
+    for (const auto &polygon : m_polygons) {
+        if (polygon && polygon->involvesLine(line))
+            polygonsToDelete.push_back(polygon.get());
+    }
+
+    for (Polygon *polygon : polygonsToDelete)
+        deletePolygon(polygon);
 
     const auto it = std::find_if(m_lines.begin(), m_lines.end(),
                                  [line](const std::unique_ptr<Line> &candidate) {
@@ -276,6 +322,21 @@ void MainWindow::deleteLine(Line *line)
 
     if (it != m_lines.end())
         m_lines.erase(it);
+}
+
+void MainWindow::deletePolygon(Polygon *polygon)
+{
+    if (!polygon)
+        return;
+
+    const auto it = std::find_if(m_polygons.begin(),
+                                 m_polygons.end(),
+                                 [polygon](const std::unique_ptr<Polygon> &candidate) {
+                                     return candidate.get() == polygon;
+                                 });
+
+    if (it != m_polygons.end())
+        m_polygons.erase(it);
 }
 
 Line *MainWindow::findLineByGraphicsItem(const QGraphicsItem *item) const
@@ -289,6 +350,23 @@ Line *MainWindow::findLineByGraphicsItem(const QGraphicsItem *item) const
                                  });
 
     if (it != m_lines.end())
+        return it->get();
+
+    return nullptr;
+}
+
+Polygon *MainWindow::findPolygonByGraphicsItem(const QGraphicsItem *item) const
+{
+    if (!item)
+        return nullptr;
+
+    const auto it = std::find_if(m_polygons.begin(),
+                                 m_polygons.end(),
+                                 [item](const std::unique_ptr<Polygon> &polygon) {
+                                     return polygon && polygon->graphicsItem() == item;
+                                 });
+
+    if (it != m_polygons.end())
         return it->get();
 
     return nullptr;
@@ -328,6 +406,101 @@ Line *MainWindow::findLineByVertices(Vertex *startVertex, Vertex *endVertex) con
     return nullptr;
 }
 
+bool MainWindow::orderLinesIntoPolygon(const std::vector<Line *> &inputLines,
+                                       std::vector<Line *> &orderedLines,
+                                       std::vector<Vertex *> &orderedVertices) const
+{
+    if (inputLines.size() < 3)
+        return false;
+
+    std::unordered_set<Line *> uniqueLines;
+    uniqueLines.reserve(inputLines.size());
+
+    std::unordered_map<Vertex *, std::vector<Line *>> adjacency;
+    adjacency.reserve(inputLines.size() * 2);
+
+    for (Line *line : inputLines) {
+        if (!line)
+            return false;
+
+        Vertex *start = line->startVertex();
+        Vertex *end = line->endVertex();
+        if (!start || !end)
+            return false;
+
+        if (!uniqueLines.insert(line).second)
+            return false;
+
+        adjacency[start].push_back(line);
+        adjacency[end].push_back(line);
+    }
+
+    for (auto &entry : adjacency) {
+        if (entry.second.size() != 2)
+            return false;
+
+        if (entry.second.front() == entry.second.back())
+            return false;
+    }
+
+    orderedLines.clear();
+    orderedVertices.clear();
+    orderedLines.reserve(inputLines.size());
+    orderedVertices.reserve(inputLines.size());
+
+    Line *initialLine = inputLines.front();
+    Vertex *startVertex = initialLine->startVertex();
+    Vertex *currentVertex = startVertex;
+    Line *previousLine = nullptr;
+
+    std::unordered_set<Line *> usedLines;
+    usedLines.reserve(inputLines.size());
+
+    do {
+        const auto adjacencyIt = adjacency.find(currentVertex);
+        if (adjacencyIt == adjacency.end())
+            return false;
+
+        const auto &adjacentLines = adjacencyIt->second;
+        Line *nextLine = nullptr;
+
+        if (!previousLine) {
+            for (Line *candidate : adjacentLines) {
+                if (!usedLines.count(candidate)) {
+                    nextLine = candidate;
+                    break;
+                }
+            }
+        } else {
+            nextLine = adjacentLines.front() == previousLine ? adjacentLines.back() : adjacentLines.front();
+            if (usedLines.count(nextLine))
+                return false;
+        }
+
+        if (!nextLine)
+            return false;
+
+        orderedLines.push_back(nextLine);
+        usedLines.insert(nextLine);
+        orderedVertices.push_back(currentVertex);
+
+        currentVertex = nextLine->startVertex() == currentVertex ? nextLine->endVertex() : nextLine->startVertex();
+        previousLine = nextLine;
+
+    } while (currentVertex != startVertex && orderedLines.size() <= inputLines.size());
+
+    if (currentVertex != startVertex)
+        return false;
+
+    if (orderedLines.size() != inputLines.size())
+        return false;
+
+    if (orderedVertices.size() != orderedLines.size())
+        return false;
+
+    return true;
+}
+
 void MainWindow::on_actionDelete_Image_triggered(){
     if (!m_scene)
         return;
@@ -341,7 +514,9 @@ void MainWindow::on_actionDelete_Image_triggered(){
     m_scene->clearSelection();
     m_vertices.clear();
     m_lines.clear();
+    m_polygons.clear();
     m_nextLineId = 0;
+    m_nextPolygonId = 0;
 
     m_scene->setSceneRect(0.0, 0.0, 512.0, 512.0);
     ui->graphicsView->setSceneRect(m_scene->sceneRect());
@@ -474,6 +649,220 @@ void MainWindow::on_actionAdd_Line_triggered()
     updateSelectionLabels(line);
 }
 
+void MainWindow::on_actionAdd_Polygon_triggered()
+{
+    if (!m_scene)
+        return;
+
+    if (m_vertices.size() < 3 && m_lines.size() < 3) {
+        QMessageBox::information(this,
+                                 tr("Add Polygon"),
+                                 tr("At least three vertices or three lines are required to create a polygon."));
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Add Polygon"));
+
+    auto *mainLayout = new QVBoxLayout(&dialog);
+
+    auto *modeGroup = new QGroupBox(tr("Definition Mode"), &dialog);
+    auto *modeLayout = new QHBoxLayout(modeGroup);
+    auto *verticesRadio = new QRadioButton(tr("By Vertices"), modeGroup);
+    auto *linesRadio = new QRadioButton(tr("By Lines"), modeGroup);
+    verticesRadio->setChecked(true);
+    modeLayout->addWidget(verticesRadio);
+    modeLayout->addWidget(linesRadio);
+    modeGroup->setLayout(modeLayout);
+    mainLayout->addWidget(modeGroup);
+
+    auto *stack = new QStackedWidget(&dialog);
+
+    auto *verticesWidget = new QWidget(&dialog);
+    auto *verticesLayout = new QVBoxLayout(verticesWidget);
+    auto *verticesLabel = new QLabel(tr("Enter vertex IDs separated by commas or spaces:"), verticesWidget);
+    auto *verticesLineEdit = new QLineEdit(verticesWidget);
+    verticesLayout->addWidget(verticesLabel);
+    verticesLayout->addWidget(verticesLineEdit);
+    verticesWidget->setLayout(verticesLayout);
+    stack->addWidget(verticesWidget);
+
+    auto *linesWidget = new QWidget(&dialog);
+    auto *linesLayout = new QVBoxLayout(linesWidget);
+    auto *linesLabel = new QLabel(tr("Enter line IDs separated by commas or spaces:"), linesWidget);
+    auto *linesLineEdit = new QLineEdit(linesWidget);
+    linesLayout->addWidget(linesLabel);
+    linesLayout->addWidget(linesLineEdit);
+    linesWidget->setLayout(linesLayout);
+    stack->addWidget(linesWidget);
+
+    QObject::connect(verticesRadio, &QRadioButton::toggled, stack, [stack](bool checked) {
+        if (checked)
+            stack->setCurrentIndex(0);
+    });
+    QObject::connect(linesRadio, &QRadioButton::toggled, stack, [stack](bool checked) {
+        if (checked)
+            stack->setCurrentIndex(1);
+    });
+
+    mainLayout->addWidget(stack);
+
+    auto *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                                           Qt::Horizontal,
+                                           &dialog);
+    mainLayout->addWidget(buttonBox);
+
+    QObject::connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    auto parseIds = [](const QString &text, std::vector<int> &ids) {
+        ids.clear();
+        const QString trimmed = text.trimmed();
+        if (trimmed.isEmpty())
+            return false;
+
+        const QRegularExpression separator(QStringLiteral("[,\\s]+"));
+        const QStringList parts = trimmed.split(separator, Qt::SkipEmptyParts);
+        ids.reserve(parts.size());
+        for (const QString &part : parts) {
+            bool ok = false;
+            const int value = part.toInt(&ok);
+            if (!ok)
+                return false;
+            ids.push_back(value);
+        }
+        return !ids.empty();
+    };
+
+    std::vector<Vertex *> polygonVertices;
+    std::vector<Line *> polygonLines;
+
+    if (verticesRadio->isChecked()) {
+        std::vector<int> vertexIds;
+        if (!parseIds(verticesLineEdit->text(), vertexIds)) {
+            QMessageBox::warning(this,
+                                  tr("Add Polygon"),
+                                  tr("Please provide at least three vertex IDs."));
+            return;
+        }
+
+        if (vertexIds.size() < 3) {
+            QMessageBox::warning(this,
+                                  tr("Add Polygon"),
+                                  tr("Please provide at least three distinct vertex IDs."));
+            return;
+        }
+
+        if (vertexIds.size() > 1 && vertexIds.front() == vertexIds.back())
+            vertexIds.pop_back();
+
+        std::set<int> uniqueVertexIds;
+        polygonVertices.reserve(vertexIds.size());
+        for (int id : vertexIds) {
+            if (!uniqueVertexIds.insert(id).second) {
+                QMessageBox::warning(this,
+                                      tr("Add Polygon"),
+                                      tr("Vertex ID %1 is duplicated.").arg(id));
+                return;
+            }
+
+            Vertex *vertex = findVertexById(id);
+            if (!vertex) {
+                QMessageBox::warning(this,
+                                      tr("Add Polygon"),
+                                      tr("Vertex ID %1 was not found.").arg(id));
+                return;
+            }
+
+            polygonVertices.push_back(vertex);
+        }
+
+        if (polygonVertices.size() < 3) {
+            QMessageBox::warning(this,
+                                  tr("Add Polygon"),
+                                  tr("A polygon requires at least three vertices."));
+            return;
+        }
+
+        polygonLines.reserve(polygonVertices.size());
+        for (std::size_t i = 0; i < polygonVertices.size(); ++i) {
+            Vertex *startVertex = polygonVertices[i];
+            Vertex *endVertex = polygonVertices[(i + 1) % polygonVertices.size()];
+            Line *line = findLineByVertices(startVertex, endVertex);
+            if (!line) {
+                QMessageBox::warning(this,
+                                      tr("Add Polygon"),
+                                      tr("No line connects vertex %1 and vertex %2.").arg(startVertex->id()).arg(endVertex->id()));
+                return;
+            }
+
+            polygonLines.push_back(line);
+        }
+    } else {
+        std::vector<int> lineIds;
+        if (!parseIds(linesLineEdit->text(), lineIds)) {
+            QMessageBox::warning(this,
+                                  tr("Add Polygon"),
+                                  tr("Please provide at least three line IDs."));
+            return;
+        }
+
+        if (lineIds.size() < 3) {
+            QMessageBox::warning(this,
+                                  tr("Add Polygon"),
+                                  tr("Please provide at least three distinct line IDs."));
+            return;
+        }
+
+        std::set<int> uniqueLineIds;
+        std::vector<Line *> inputLines;
+        inputLines.reserve(lineIds.size());
+        for (int id : lineIds) {
+            if (!uniqueLineIds.insert(id).second) {
+                QMessageBox::warning(this,
+                                      tr("Add Polygon"),
+                                      tr("Line ID %1 is duplicated.").arg(id));
+                return;
+            }
+
+            Line *line = findLineById(id);
+            if (!line) {
+                QMessageBox::warning(this,
+                                      tr("Add Polygon"),
+                                      tr("Line ID %1 was not found.").arg(id));
+                return;
+            }
+
+            inputLines.push_back(line);
+        }
+
+        if (!orderLinesIntoPolygon(inputLines, polygonLines, polygonVertices)) {
+            QMessageBox::warning(this,
+                                  tr("Add Polygon"),
+                                  tr("The provided lines do not form a closed polygon."));
+            return;
+        }
+    }
+
+    Polygon *polygon = createPolygon(polygonVertices, polygonLines);
+    if (!polygon) {
+        QMessageBox::warning(this,
+                              tr("Add Polygon"),
+                              tr("Failed to create the polygon."));
+        return;
+    }
+
+    if (QGraphicsItem *item = polygon->graphicsItem()) {
+        m_scene->clearSelection();
+        item->setSelected(true);
+    }
+
+    updateSelectionLabels(polygon);
+}
+
 void MainWindow::on_actionFind_Line_triggered()
 {
     if (m_lines.empty()) {
@@ -581,7 +970,9 @@ void MainWindow::on_actionDelete_All_Vertices_triggered()
     if (reply == QMessageBox::Yes) {
         m_vertices.clear();
         m_lines.clear();
+        m_polygons.clear();
         m_nextLineId = 0;
+        m_nextPolygonId = 0;
         resetSelectionLabels();
     }
 }
@@ -661,7 +1052,9 @@ void MainWindow::on_actionDelete_All_Lines_triggered()
         m_scene->clearSelection();
 
     m_lines.clear();
+    m_polygons.clear();
     m_nextLineId = 0;
+    m_nextPolygonId = 0;
     resetSelectionLabels();
 }
 
@@ -816,6 +1209,8 @@ void MainWindow::onSceneSelectionChanged()
         updateSelectionLabels(vertex);
     } else if (Line *line = findLineByGraphicsItem(item)) {
         updateSelectionLabels(line);
+    } else if (Polygon *polygon = findPolygonByGraphicsItem(item)) {
+        updateSelectionLabels(polygon);
     } else {
         resetSelectionLabels();
     }
@@ -835,6 +1230,8 @@ void MainWindow::onSceneChanged(const QList<QRectF> & /*region*/)
         updateSelectionLabels(vertex);
     } else if (Line *line = findLineByGraphicsItem(item)) {
         updateSelectionLabels(line);
+    } else if (Polygon *polygon = findPolygonByGraphicsItem(item)) {
+        updateSelectionLabels(polygon);
     }
 }
 
@@ -978,6 +1375,29 @@ void MainWindow::updateSelectionLabels(Line *line)
     ui->label_selected_item_pos->setText(tr("%1 → %2").arg(startText, endText));
 }
 
+void MainWindow::updateSelectionLabels(Polygon *polygon)
+{
+    if (!polygon)
+        return;
+
+    ui->label_selected_item->setText(tr("polygon"));
+    ui->label_selected_item_id->setText(QString::number(polygon->id()));
+
+    QStringList vertexDescriptions;
+    for (Vertex *vertex : polygon->vertices()) {
+        if (!vertex)
+            continue;
+
+        const QGraphicsItem *graphicsItem = vertex->graphicsItem();
+        const QPointF pos = graphicsItem ? graphicsItem->scenePos() : vertex->position();
+        const QString xText = QString::number(pos.x(), 'f', 2);
+        const QString yText = QString::number(pos.y(), 'f', 2);
+        vertexDescriptions.append(tr("v%1 (%2, %3)").arg(vertex->id()).arg(xText, yText));
+    }
+
+    ui->label_selected_item_pos->setText(vertexDescriptions.join(QStringLiteral("; ")));
+}
+
 void MainWindow::on_actionCell_Contour_Image_triggered()
 {
     if (!m_scene)
@@ -1007,6 +1427,10 @@ void MainWindow::on_actionCell_Contour_Image_triggered()
 
     m_scene->clearSelection();
     m_vertices.clear();
+    m_lines.clear();
+    m_polygons.clear();
+    m_nextLineId = 0;
+    m_nextPolygonId = 0;
 
     m_backgroundItem = m_scene->addPixmap(pixmap);
     if (m_backgroundItem) {
@@ -1105,6 +1529,10 @@ void MainWindow::on_actionCustom_Canvas_triggered()
     }
 
     m_vertices.clear();
+    m_lines.clear();
+    m_polygons.clear();
+    m_nextLineId = 0;
+    m_nextPolygonId = 0;
 }
 
 void MainWindow::on_actionExport_Vertex_Only_triggered()
@@ -1230,7 +1658,9 @@ void MainWindow::on_actionImport_Vertex_Only_triggered()
     m_scene->clearSelection();
     m_lines.clear();
     m_vertices.clear();
+    m_polygons.clear();
     m_nextLineId = 0;
+    m_nextPolygonId = 0;
 
     for (const auto &vertexData : importedVertices)
         createVertexWithId(vertexData.first, vertexData.second);
@@ -1510,7 +1940,9 @@ void MainWindow::on_actionImport_Vertex_Line_triggered()
     m_scene->clearSelection();
     m_lines.clear();
     m_vertices.clear();
+    m_polygons.clear();
     m_nextLineId = 0;
+    m_nextPolygonId = 0;
 
     for (const auto &vertexData : importedVertices)
         createVertexWithId(vertexData.id, vertexData.position);

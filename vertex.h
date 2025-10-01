@@ -8,6 +8,7 @@ class QGraphicsItem;
 class QGraphicsScene;
 class VertexGraphicsItem;
 class Line;
+class Polygon;
 
 class Vertex
 {
@@ -21,6 +22,8 @@ public:
     QGraphicsItem *graphicsItem() const;
     void addConnectedLine(Line *line);
     void removeConnectedLine(Line *line);
+    void addConnectedPolygon(Polygon *polygon);
+    void removeConnectedPolygon(Polygon *polygon);
 
 private:
     void updateGraphicsItem();
@@ -33,6 +36,7 @@ private:
     VertexGraphicsItem *m_item;
     qreal m_radius;
     std::vector<Line *> m_lines;
+    std::vector<Polygon *> m_polygons;
 
     friend class VertexGraphicsItem;
 };

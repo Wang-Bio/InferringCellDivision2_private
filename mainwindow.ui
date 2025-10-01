@@ -151,6 +151,7 @@
     <addaction name="actionAdd_Vertex"/>
     <addaction name="actionDelete_Vertex"/>
     <addaction name="actionAdd_Line"/>
+    <addaction name="actionAdd_Polygon"/>
     <addaction name="actionDelete_Line"/>
     <addaction name="actionDelete_All_Vertices"/>
     <addaction name="actionDelete_All_Lines"/>
@@ -215,6 +216,11 @@
   <action name="actionAdd_Line">
    <property name="text">
     <string>Add Line</string>
+   </property>
+  </action>
+  <action name="actionAdd_Polygon">
+   <property name="text">
+    <string>Add Polygon</string>
    </property>
   </action>
   <action name="actionDelete_Vertex">

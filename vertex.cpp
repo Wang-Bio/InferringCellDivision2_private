@@ -1,6 +1,7 @@
 #include "vertex.h"
 
 #include "line.h"
+#include "polygon.h"
 
 #include <QGraphicsScene>
 #include <QGraphicsEllipseItem>
@@ -115,6 +116,22 @@ void Vertex::removeConnectedLine(Line *line)
         m_lines.erase(it, m_lines.end());
 }
 
+void Vertex::addConnectedPolygon(Polygon *polygon)
+{
+    if (!polygon)
+        return;
+
+    if (std::find(m_polygons.begin(), m_polygons.end(), polygon) == m_polygons.end())
+        m_polygons.push_back(polygon);
+}
+
+void Vertex::removeConnectedPolygon(Polygon *polygon)
+{
+    const auto it = std::remove(m_polygons.begin(), m_polygons.end(), polygon);
+    if (it != m_polygons.end())
+        m_polygons.erase(it, m_polygons.end());
+}
+
 void Vertex::updateGraphicsItem()
 {
     if (!m_item)
@@ -135,5 +152,10 @@ void Vertex::notifyConnectedLines()
     for (Line *line : m_lines) {
         if (line)
             line->updatePosition();
+    }
+
+    for (Polygon *polygon : m_polygons) {
+        if (polygon)
+            polygon->updateShape();
     }
 }

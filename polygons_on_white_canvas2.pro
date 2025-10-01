@@ -13,12 +13,14 @@ SOURCES += \
     mainwindow.cpp \
     line.cpp \
     vertex.cpp \
+    polygon.cpp \
     zoomablegraphicsview.cpp
 
 HEADERS += \
     mainwindow.h \
     line.h \
     vertex.h \
+    polygon.h \
     zoomablegraphicsview.h
 
 FORMS += \

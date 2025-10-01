@@ -12,6 +12,7 @@ class QGraphicsScene;
 class ZoomableGraphicsView;
 class Vertex;
 class Line;
+class Polygon;
 class QGraphicsPixmapItem;
 class QGraphicsItem;
 
@@ -39,6 +40,7 @@ private slots:
     void on_actionAdd_Line_triggered();
     void on_actionDelete_Line_triggered();
     void on_actionDelete_All_Lines_triggered();
+    void on_actionAdd_Polygon_triggered();
     void on_actionCell_Contour_Image_triggered();
     void on_actionCustom_Canvas_triggered();
     void on_actionExport_Vertex_Only_triggered();
@@ -71,12 +73,22 @@ private:
     void resetSelectionLabels();
     void updateSelectionLabels(Vertex *vertex);
     void updateSelectionLabels(Line *line);
+    void updateSelectionLabels(Polygon *polygon);
 
     Ui::MainWindow *ui;
     QGraphicsScene *m_scene = nullptr;
     std::vector<std::unique_ptr<Vertex>> m_vertices;
     std::vector<std::unique_ptr<Line>> m_lines;
+    std::vector<std::unique_ptr<Polygon>> m_polygons;
     QGraphicsPixmapItem *m_backgroundItem = nullptr;
     int m_nextLineId = 0;
+    int m_nextPolygonId = 0;
+
+    Polygon *createPolygon(const std::vector<Vertex *> &vertices, const std::vector<Line *> &lines);
+    void deletePolygon(Polygon *polygon);
+    Polygon *findPolygonByGraphicsItem(const QGraphicsItem *item) const;
+    bool orderLinesIntoPolygon(const std::vector<Line *> &inputLines,
+                               std::vector<Line *> &orderedLines,
+                               std::vector<Vertex *> &orderedVertices) const;
 };
 #endif // MAINWINDOW_H
