@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 #include "vertex.h"
 #include "zoomablegraphicsview.h"
+#include "line.h"
 
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -74,7 +75,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    m_lines.clear();
     m_vertices.clear();
+    m_nextLineId = 0;
 
     if (m_scene && m_backgroundItem) {
         m_scene->removeItem(m_backgroundItem);
@@ -99,6 +102,16 @@ void MainWindow::deleteVertex(Vertex *vertex)
 {
     if (!vertex)
         return;
+
+    std::vector<Line *> linesToDelete;
+    linesToDelete.reserve(m_lines.size());
+    for (const auto &line : m_lines) {
+        if (line && line->involvesVertex(vertex))
+            linesToDelete.push_back(line.get());
+    }
+
+    for (Line *line : linesToDelete)
+        deleteLine(line);
 
     const auto it = std::find_if(m_vertices.begin(), m_vertices.end(),
                                  [vertex](const std::unique_ptr<Vertex> &candidate) {
@@ -130,6 +143,81 @@ void MainWindow::sortVerticesById()
               });
 }
 
+Vertex *MainWindow::findVertexById(int id) const
+{
+    const auto it = std::find_if(m_vertices.begin(), m_vertices.end(),
+                                 [id](const std::unique_ptr<Vertex> &vertex) {
+                                     return vertex && vertex->id() == id;
+                                 });
+
+    if (it != m_vertices.end())
+        return it->get();
+
+    return nullptr;
+}
+
+Line *MainWindow::createLine(Vertex *startVertex, Vertex *endVertex)
+{
+    if (!startVertex || !endVertex || startVertex == endVertex || !m_scene)
+        return nullptr;
+
+    auto line = std::make_unique<Line>(m_nextLineId++, startVertex, endVertex, m_scene);
+    Line *linePtr = line.get();
+    m_lines.push_back(std::move(line));
+    return linePtr;
+}
+
+void MainWindow::deleteLine(Line *line)
+{
+    if (!line)
+        return;
+
+    const auto it = std::find_if(m_lines.begin(), m_lines.end(),
+                                 [line](const std::unique_ptr<Line> &candidate) {
+                                     return candidate.get() == line;
+                                 });
+
+    if (it != m_lines.end())
+        m_lines.erase(it);
+}
+
+Line *MainWindow::findLineByGraphicsItem(const QGraphicsItem *item) const
+{
+    if (!item)
+        return nullptr;
+
+    const auto it = std::find_if(m_lines.begin(), m_lines.end(),
+                                 [item](const std::unique_ptr<Line> &line) {
+                                     return line && line->graphicsItem() == item;
+                                 });
+
+    if (it != m_lines.end())
+        return it->get();
+
+    return nullptr;
+}
+
+Line *MainWindow::findLineByVertices(Vertex *startVertex, Vertex *endVertex) const
+{
+    if (!startVertex || !endVertex)
+        return nullptr;
+
+    const auto it = std::find_if(m_lines.begin(), m_lines.end(),
+                                 [startVertex, endVertex](const std::unique_ptr<Line> &line) {
+                                     if (!line)
+                                         return false;
+
+                                     const bool sameDirection = line->startVertex() == startVertex && line->endVertex() == endVertex;
+                                     const bool oppositeDirection = line->startVertex() == endVertex && line->endVertex() == startVertex;
+                                     return sameDirection || oppositeDirection;
+                                 });
+
+    if (it != m_lines.end())
+        return it->get();
+
+    return nullptr;
+}
+
 void MainWindow::on_actionDelete_Image_triggered(){
     if (!m_scene)
         return;
@@ -142,6 +230,8 @@ void MainWindow::on_actionDelete_Image_triggered(){
 
     m_scene->clearSelection();
     m_vertices.clear();
+    m_lines.clear();
+    m_nextLineId = 0;
 
     m_scene->setSceneRect(0.0, 0.0, 512.0, 512.0);
     ui->graphicsView->setSceneRect(m_scene->sceneRect());
@@ -189,6 +279,89 @@ void MainWindow::on_actionAdd_Vertex_triggered()
     if (dialog.exec() == QDialog::Accepted) {
         createVertex(QPointF(xSpinBox->value(), ySpinBox->value()));
     }
+}
+
+void MainWindow::on_actionAdd_Line_triggered()
+{
+    if (m_vertices.size() < 2) {
+        QMessageBox::information(this,
+                                 tr("Add Line"),
+                                 tr("At least two vertices are required to add a line."));
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Add Line"));
+
+    QFormLayout form(&dialog);
+
+    auto *startSpinBox = new QSpinBox(&dialog);
+    auto *endSpinBox = new QSpinBox(&dialog);
+
+    int maxId = 0;
+    for (const auto &vertex : m_vertices) {
+        if (vertex)
+            maxId = std::max(maxId, vertex->id());
+    }
+
+    startSpinBox->setRange(0, std::max(0, maxId));
+    endSpinBox->setRange(0, std::max(0, maxId));
+
+    form.addRow(tr("Start vertex ID:"), startSpinBox);
+    form.addRow(tr("End vertex ID:"), endSpinBox);
+
+    QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+                               Qt::Horizontal,
+                               &dialog);
+    form.addRow(&buttonBox);
+
+    QObject::connect(&buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(&buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const int startId = startSpinBox->value();
+    const int endId = endSpinBox->value();
+
+    if (startId == endId) {
+        QMessageBox::warning(this,
+                              tr("Add Line"),
+                              tr("The start and end vertices must be different."));
+        return;
+    }
+
+    Vertex *startVertex = findVertexById(startId);
+    Vertex *endVertex = findVertexById(endId);
+
+    if (!startVertex || !endVertex) {
+        QMessageBox::warning(this,
+                              tr("Add Line"),
+                              tr("One or both vertex IDs could not be found."));
+        return;
+    }
+
+    if (findLineByVertices(startVertex, endVertex)) {
+        QMessageBox::information(this,
+                                 tr("Add Line"),
+                                 tr("A line already exists between the selected vertices."));
+        return;
+    }
+
+    Line *line = createLine(startVertex, endVertex);
+    if (!line) {
+        QMessageBox::warning(this,
+                              tr("Add Line"),
+                              tr("The line could not be created."));
+        return;
+    }
+
+    if (QGraphicsItem *item = line->graphicsItem()) {
+        m_scene->clearSelection();
+        item->setSelected(true);
+    }
+
+    updateSelectionLabels(line);
 }
 
 void MainWindow::on_actionDelete_Vertex_triggered()
@@ -239,6 +412,8 @@ void MainWindow::on_actionDelete_All_Vertices_triggered()
 
     if (reply == QMessageBox::Yes) {
         m_vertices.clear();
+        m_lines.clear();
+        m_nextLineId = 0;
         resetSelectionLabels();
     }
 }
@@ -389,9 +564,11 @@ void MainWindow::onSceneSelectionChanged()
         return;
     }
 
-    Vertex *vertex = findVertexByGraphicsItem(selectedItems.first());
-    if (vertex) {
+    QGraphicsItem *item = selectedItems.first();
+    if (Vertex *vertex = findVertexByGraphicsItem(item)) {
         updateSelectionLabels(vertex);
+    } else if (Line *line = findLineByGraphicsItem(item)) {
+        updateSelectionLabels(line);
     } else {
         resetSelectionLabels();
     }
@@ -406,8 +583,11 @@ void MainWindow::onSceneChanged(const QList<QRectF> & /*region*/)
     if (selectedItems.size() != 1)
         return;
 
-    if (Vertex *vertex = findVertexByGraphicsItem(selectedItems.first())) {
+    QGraphicsItem *item = selectedItems.first();
+    if (Vertex *vertex = findVertexByGraphicsItem(item)) {
         updateSelectionLabels(vertex);
+    } else if (Line *line = findLineByGraphicsItem(item)) {
+        updateSelectionLabels(line);
     }
 }
 
@@ -468,6 +648,30 @@ void MainWindow::updateSelectionLabels(Vertex *vertex)
     const QString xText = QString::number(pos.x(), 'f', 2);
     const QString yText = QString::number(pos.y(), 'f', 2);
     ui->label_selected_item_pos->setText(tr("(%1, %2)").arg(xText, yText));
+}
+
+void MainWindow::updateSelectionLabels(Line *line)
+{
+    if (!line)
+        return;
+
+    ui->label_selected_item->setText(tr("line"));
+    ui->label_selected_item_id->setText(QString::number(line->id()));
+
+    auto formatVertex = [](Vertex *vertex) {
+        if (!vertex)
+            return QStringLiteral("-");
+
+        const QGraphicsItem *graphicsItem = vertex->graphicsItem();
+        const QPointF pos = graphicsItem ? graphicsItem->scenePos() : vertex->position();
+        const QString xText = QString::number(pos.x(), 'f', 2);
+        const QString yText = QString::number(pos.y(), 'f', 2);
+        return QStringLiteral("v%1 (%2, %3)").arg(vertex->id()).arg(xText, yText);
+    };
+
+    const QString startText = formatVertex(line->startVertex());
+    const QString endText = formatVertex(line->endVertex());
+    ui->label_selected_item_pos->setText(tr("%1 → %2").arg(startText, endText));
 }
 
 void MainWindow::on_actionCell_Contour_Image_triggered()

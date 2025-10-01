@@ -125,7 +125,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>20</height>
+     <height>24</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuOpen">
@@ -150,7 +150,10 @@
     <addaction name="actionDelete_Image"/>
     <addaction name="actionAdd_Vertex"/>
     <addaction name="actionDelete_Vertex"/>
+    <addaction name="actionAdd_Line"/>
+    <addaction name="actionDelete_Line"/>
     <addaction name="actionDelete_All_Vertices"/>
+    <addaction name="actionDelete_All_Lines"/>
    </widget>
    <widget class="QMenu" name="menuFind">
     <property name="title">
@@ -198,6 +201,11 @@
     <string>Add Vertex</string>
    </property>
   </action>
+  <action name="actionAdd_Line">
+   <property name="text">
+    <string>Add Line</string>
+   </property>
+  </action>
   <action name="actionDelete_Vertex">
    <property name="text">
     <string>Delete Vertex</string>
@@ -236,6 +244,16 @@
   <action name="actionDelete_Image">
    <property name="text">
     <string>Delete Image</string>
+   </property>
+  </action>
+  <action name="actionDelete_Line">
+   <property name="text">
+    <string>Delete Line</string>
+   </property>
+  </action>
+  <action name="actionDelete_All_Lines">
+   <property name="text">
+    <string>Delete All Lines</string>
    </property>
   </action>
  </widget>

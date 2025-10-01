@@ -2,10 +2,12 @@
 #define VERTEX_H
 
 #include <QPointF>
+#include <vector>
 
 class QGraphicsItem;
 class QGraphicsScene;
 class VertexGraphicsItem;
+class Line;
 
 class Vertex
 {
@@ -17,16 +19,20 @@ public:
     QPointF position() const;
     void setPosition(const QPointF &position);
     QGraphicsItem *graphicsItem() const;
+    void addConnectedLine(Line *line);
+    void removeConnectedLine(Line *line);
 
 private:
     void updateGraphicsItem();
     void updatePositionFromGraphicsItem(const QPointF &position);
+    void notifyConnectedLines();
 
     int m_id;
     QPointF m_position;
     QGraphicsScene *m_scene;
     VertexGraphicsItem *m_item;
     qreal m_radius;
+    std::vector<Line *> m_lines;
 
     friend class VertexGraphicsItem;
 };

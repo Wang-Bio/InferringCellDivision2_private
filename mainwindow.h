@@ -11,6 +11,7 @@
 class QGraphicsScene;
 class ZoomableGraphicsView;
 class Vertex;
+class Line;
 class QGraphicsPixmapItem;
 class QGraphicsItem;
 
@@ -34,6 +35,7 @@ private slots:
     void on_actionDelete_Vertex_triggered();
     void on_actionDelete_All_Vertices_triggered();
     void on_actionFind_Vertex_triggered();
+    void on_actionAdd_Line_triggered();
     void on_actionCell_Contour_Image_triggered();
     void on_actionCustom_Canvas_triggered();
     void onSceneSelectionChanged();
@@ -46,12 +48,20 @@ private:
     int nextAvailableId() const;
     void sortVerticesById();
     Vertex *findVertexByGraphicsItem(const QGraphicsItem *item) const;
+    Vertex *findVertexById(int id) const;
+    Line *createLine(Vertex *startVertex, Vertex *endVertex);
+    void deleteLine(Line *line);
+    Line *findLineByGraphicsItem(const QGraphicsItem *item) const;
+    Line *findLineByVertices(Vertex *startVertex, Vertex *endVertex) const;
     void resetSelectionLabels();
     void updateSelectionLabels(Vertex *vertex);
+    void updateSelectionLabels(Line *line);
 
     Ui::MainWindow *ui;
     QGraphicsScene *m_scene = nullptr;
     std::vector<std::unique_ptr<Vertex>> m_vertices;
+    std::vector<std::unique_ptr<Line>> m_lines;
     QGraphicsPixmapItem *m_backgroundItem = nullptr;
+    int m_nextLineId = 0;
 };
 #endif // MAINWINDOW_H

@@ -1,5 +1,7 @@
 #include "vertex.h"
 
+#include "line.h"
+
 #include <QGraphicsScene>
 #include <QGraphicsEllipseItem>
 #include <QPen>
@@ -8,6 +10,7 @@
 #include <QGraphicsSceneMouseEvent>
 #include <QCursor>
 #include <QVariant>
+#include <algorithm>
 
 class VertexGraphicsItem : public QGraphicsEllipseItem
 {
@@ -88,11 +91,28 @@ void Vertex::setPosition(const QPointF &position)
 {
     m_position = position;
     updateGraphicsItem();
+    notifyConnectedLines();
 }
 
 QGraphicsItem *Vertex::graphicsItem() const
 {
     return m_item;
+}
+
+void Vertex::addConnectedLine(Line *line)
+{
+    if (!line)
+        return;
+
+    if (std::find(m_lines.begin(), m_lines.end(), line) == m_lines.end())
+        m_lines.push_back(line);
+}
+
+void Vertex::removeConnectedLine(Line *line)
+{
+    const auto it = std::remove(m_lines.begin(), m_lines.end(), line);
+    if (it != m_lines.end())
+        m_lines.erase(it, m_lines.end());
 }
 
 void Vertex::updateGraphicsItem()
@@ -107,4 +127,13 @@ void Vertex::updateGraphicsItem()
 void Vertex::updatePositionFromGraphicsItem(const QPointF &position)
 {
     m_position = position;
+    notifyConnectedLines();
+}
+
+void Vertex::notifyConnectedLines()
+{
+    for (Line *line : m_lines) {
+        if (line)
+            line->updatePosition();
+    }
 }
